@@ -1,0 +1,2086 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MRZ Live Scanner — Machine Readable Zone Detection</title>
+  <meta name="description"
+    content="Live MRZ scanner using Dynamsoft Label Recognizer to detect and validate passport and ID card machine readable zones in real-time.">
+  <script src="https://cdn.jsdelivr.net/npm/dynamsoft-label-recognizer@2.2.31/dist/dlr.js"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --bg: #030a0f;
+      --surface: #060f18;
+      --panel: #091520;
+      --border: #0d2d44;
+      --accent: #00d4ff;
+      --accent2: #00ff9d;
+      --warn: #ffb800;
+      --danger: #ff3b3b;
+      --success: #00ff9d;
+      --text: #c8e8f5;
+      --muted: #3a6b88;
+      --mono: 'Share Tech Mono', monospace;
+      --ui: 'Rajdhani', sans-serif;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--ui);
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 212, 255, 0.012) 2px, rgba(0, 212, 255, 0.012) 4px);
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .app {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 16px 12px 40px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      border: 2px solid var(--accent);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .logo-icon::after {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 3px;
+      background: var(--accent);
+      animation: scan-logo 2s ease-in-out infinite;
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    @keyframes scan-logo {
+
+      0%,
+      100% {
+        top: -3px;
+        opacity: 0;
+      }
+
+      10% {
+        opacity: 1;
+      }
+
+      90% {
+        opacity: 1;
+      }
+
+      50% {
+        top: calc(100% + 3px);
+      }
+    }
+
+    .logo-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: var(--accent);
+    }
+
+    .logo-text h1 {
+      font-family: var(--ui);
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .logo-text p {
+      font-size: 0.6rem;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: all 0.3s;
+    }
+
+    .status-dot.active {
+      background: var(--accent2);
+      box-shadow: 0 0 8px var(--accent2);
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    .status-dot.scanning {
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      animation: pulse-dot 0.8s ease-in-out infinite;
+    }
+
+    .status-dot.error {
+      background: var(--danger);
+      box-shadow: 0 0 8px var(--danger);
+    }
+
+    @keyframes pulse-dot {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.5;
+        transform: scale(0.85);
+      }
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    @media (max-width: 760px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .cam-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .cam-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.7rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .cam-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: #000;
+      overflow: hidden;
+    }
+
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .scan-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .scan-overlay::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom,
+          rgba(3, 10, 15, 0.55) 0%, transparent 35%, transparent 62%, rgba(3, 10, 15, 0.1) 100%);
+    }
+
+    .scan-zone {
+      position: absolute;
+      left: 3%;
+      right: 3%;
+      bottom: 0;
+      height: 35%;
+      border: 2px solid rgba(0, 212, 255, 0.6);
+      border-radius: 4px;
+      box-shadow:
+        0 0 0 2000px rgba(3, 10, 15, 0.45),
+        inset 0 0 20px rgba(0, 212, 255, 0.05),
+        0 0 30px rgba(0, 212, 255, 0.2);
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .scan-zone.locked {
+      border-color: var(--accent2);
+      box-shadow: 0 0 0 2000px rgba(3, 10, 15, 0.45),
+        inset 0 0 20px rgba(0, 255, 157, 0.1), 0 0 30px rgba(0, 255, 157, 0.4);
+    }
+
+    .scan-zone.fake {
+      border-color: var(--danger);
+      box-shadow: 0 0 0 2000px rgba(3, 10, 15, 0.45),
+        inset 0 0 20px rgba(255, 59, 59, 0.1), 0 0 30px rgba(255, 59, 59, 0.4);
+    }
+
+    .scan-zone.suspicious {
+      border-color: var(--warn);
+      box-shadow: 0 0 0 2000px rgba(3, 10, 15, 0.45),
+        inset 0 0 20px rgba(255, 184, 0, 0.1), 0 0 30px rgba(255, 184, 0, 0.4);
+    }
+
+    .scan-zone::before,
+    .scan-zone::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-color: var(--accent);
+      border-style: solid;
+      transition: border-color 0.3s;
+    }
+
+    .scan-zone::before {
+      top: -2px;
+      left: -2px;
+      border-width: 3px 0 0 3px;
+      border-radius: 3px 0 0 0;
+    }
+
+    .scan-zone::after {
+      bottom: -2px;
+      right: -2px;
+      border-width: 0 3px 3px 0;
+      border-radius: 0 0 3px 0;
+    }
+
+    .corner-tr,
+    .corner-bl {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-color: var(--accent);
+      border-style: solid;
+      transition: border-color 0.3s;
+    }
+
+    .corner-tr {
+      top: -2px;
+      right: -2px;
+      border-width: 3px 3px 0 0;
+      border-radius: 0 3px 0 0;
+    }
+
+    .corner-bl {
+      bottom: -2px;
+      left: -2px;
+      border-width: 0 0 3px 3px;
+      border-radius: 0 0 0 3px;
+    }
+
+    .scan-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(to right, transparent, var(--accent), var(--accent), transparent);
+      box-shadow: 0 0 12px var(--accent), 0 0 24px var(--accent);
+      animation: scan-line 2.2s ease-in-out infinite;
+      opacity: 0;
+    }
+
+    .scan-zone.active .scan-line {
+      opacity: 1;
+    }
+
+    @keyframes scan-line {
+      0% {
+        top: 0;
+        opacity: 0;
+      }
+
+      5% {
+        opacity: 1;
+      }
+
+      50% {
+        top: 100%;
+      }
+
+      55% {
+        opacity: 1;
+      }
+
+      95% {
+        opacity: 1;
+      }
+
+      100% {
+        top: 0;
+        opacity: 0;
+      }
+    }
+
+    .zone-label {
+      position: absolute;
+      top: -22px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 0.55rem;
+      letter-spacing: 3px;
+      color: rgba(0, 212, 255, 0.6);
+      text-transform: uppercase;
+    }
+
+    .confidence-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--border);
+      overflow: hidden;
+    }
+
+    .confidence-fill {
+      height: 100%;
+      background: linear-gradient(to right, var(--accent), var(--accent2));
+      width: 0%;
+      transition: width 0.3s;
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    .cam-footer {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+
+    .scanning-pulse {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--accent);
+      letter-spacing: 1px;
+    }
+
+    .scanning-pulse.active {
+      display: flex;
+    }
+
+    .scanning-pulse .dot-wave {
+      display: flex;
+      gap: 3px;
+    }
+
+    .scanning-pulse .dot-wave span {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: wave 1s infinite;
+    }
+
+    .scanning-pulse .dot-wave span:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .scanning-pulse .dot-wave span:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    @keyframes wave {
+
+      0%,
+      100% {
+        opacity: 0.3;
+        transform: scale(0.8);
+      }
+
+      50% {
+        opacity: 1;
+        transform: scale(1.3);
+      }
+    }
+
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .verdict-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color 0.4s;
+    }
+
+    .verdict-card.valid {
+      border-color: var(--success);
+    }
+
+    .verdict-card.fake {
+      border-color: var(--danger);
+    }
+
+    .verdict-card.expired {
+      border-color: var(--warn);
+    }
+
+    .verdict-card.suspicious {
+      border-color: var(--warn);
+    }
+
+    .verdict-header {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .verdict-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      background: var(--border);
+      transition: all 0.4s;
+      flex-shrink: 0;
+    }
+
+    .verdict-card.valid .verdict-icon {
+      background: rgba(0, 255, 157, 0.12);
+    }
+
+    .verdict-card.fake .verdict-icon {
+      background: rgba(255, 59, 59, 0.12);
+    }
+
+    .verdict-card.expired .verdict-icon {
+      background: rgba(255, 184, 0, 0.12);
+    }
+
+    .verdict-card.suspicious .verdict-icon {
+      background: rgba(255, 184, 0, 0.12);
+    }
+
+    .verdict-title {
+      font-size: 0.65rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: var(--mono);
+      margin-bottom: 2px;
+    }
+
+    .verdict-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--muted);
+      transition: color 0.4s;
+    }
+
+    .verdict-card.valid .verdict-value {
+      color: var(--success);
+    }
+
+    .verdict-card.fake .verdict-value {
+      color: var(--danger);
+    }
+
+    .verdict-card.expired .verdict-value {
+      color: var(--warn);
+    }
+
+    .verdict-card.suspicious .verdict-value {
+      color: var(--warn);
+    }
+
+    .verdict-checks {
+      padding: 10px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .check-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+    }
+
+    .check-label {
+      color: var(--muted);
+    }
+
+    .check-val {
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 0.6rem;
+      letter-spacing: 1px;
+    }
+
+    .check-val.ok {
+      background: rgba(0, 255, 157, 0.1);
+      color: var(--success);
+    }
+
+    .check-val.fail {
+      background: rgba(255, 59, 59, 0.1);
+      color: var(--danger);
+    }
+
+    .check-val.warn {
+      background: rgba(255, 184, 0, 0.1);
+      color: var(--warn);
+    }
+
+    .check-val.pending {
+      background: rgba(58, 107, 136, 0.2);
+      color: var(--muted);
+    }
+
+    .fields-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.65rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: var(--mono);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-header span:last-child {
+      font-size: 0.55rem;
+      color: var(--border);
+    }
+
+    .fields-grid {
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .field {
+      padding: 8px 10px;
+      background: rgba(13, 45, 68, 0.4);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      transition: border-color 0.3s;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    .field:hover {
+      border-color: var(--accent);
+    }
+
+    .field-label {
+      font-family: var(--mono);
+      font-size: 0.55rem;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+
+    .field-value {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      color: var(--text);
+      word-break: break-all;
+      min-height: 16px;
+    }
+
+    .field-value.empty {
+      color: var(--border);
+    }
+
+    .mrz-raw {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .mrz-lines {
+      padding: 12px 14px;
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      letter-spacing: 1.5px;
+      color: rgba(0, 212, 255, 0.5);
+      line-height: 1.8;
+      word-break: break-all;
+      min-height: 50px;
+      transition: color 0.3s;
+    }
+
+    .mrz-lines.has-data {
+      color: var(--accent);
+    }
+
+    .history-section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .history-list {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .history-list:empty::after {
+      content: 'No scan history yet';
+      display: block;
+      padding: 12px;
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--muted);
+      text-align: center;
+      letter-spacing: 1px;
+    }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      background: rgba(13, 45, 68, 0.3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .history-item:hover {
+      border-color: var(--accent);
+    }
+
+    .history-badge {
+      font-size: 0.85rem;
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .history-badge.valid {
+      background: rgba(0, 255, 157, 0.1);
+    }
+
+    .history-badge.fake {
+      background: rgba(255, 59, 59, 0.1);
+    }
+
+    .history-badge.expired {
+      background: rgba(255, 184, 0, 0.1);
+    }
+
+    .history-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .history-name {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-meta {
+      font-family: var(--mono);
+      font-size: 0.5rem;
+      color: var(--muted);
+      letter-spacing: 1px;
+    }
+
+    .init-screen {
+      position: absolute;
+      inset: 0;
+      background: rgba(3, 10, 15, 0.96);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      cursor: pointer;
+      transition: opacity 0.5s;
+      z-index: 10;
+    }
+
+    .init-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .init-icon {
+      width: 64px;
+      height: 64px;
+      border: 2px solid var(--accent);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: pulse-ring 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-ring {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.4);
+      }
+
+      50% {
+        box-shadow: 0 0 0 20px rgba(0, 212, 255, 0);
+      }
+    }
+
+    .init-icon svg {
+      width: 28px;
+      height: 28px;
+      fill: var(--accent);
+    }
+
+    .init-text {
+      font-family: var(--ui);
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .init-sub {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 1px;
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--panel);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--accent);
+      letter-spacing: 1px;
+      transition: transform 0.3s, opacity 0.3s;
+      opacity: 0;
+      z-index: 9998;
+      white-space: nowrap;
+      box-shadow: 0 0 30px rgba(0, 212, 255, 0.2);
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0;
+      }
+    }
+
+    .blink {
+      animation: blink 1s step-end infinite;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="app">
+    <header>
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M3 4h18v2H3V4zm0 7h18v2H3v-2zm0 7h18v2H3v-2z" />
+          </svg>
+        </div>
+        <div class="logo-text">
+          <h1>MRZ Scanner</h1>
+          <p>Dynamsoft DLR · Live Detection</p>
+        </div>
+      </div>
+      <div class="status-bar">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">INITIALIZING</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="cam-panel">
+        <div class="cam-header">
+          <span>OPTICAL SENSOR</span>
+          <span id="scanStatus">READY</span>
+        </div>
+        <div class="cam-wrap">
+          <video id="video" autoplay playsinline muted></video>
+
+          <div class="scan-overlay">
+            <div class="scan-zone" id="scanZone">
+              <div class="corner-tr"></div>
+              <div class="corner-bl"></div>
+              <div class="scan-line"></div>
+              <div class="zone-label">ALIGN MRZ WITHIN ZONE</div>
+            </div>
+          </div>
+
+          <div class="init-screen" id="initScreen" onclick="startScanner()">
+            <div class="init-icon">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+              </svg>
+            </div>
+            <div class="init-text">START SCANNER</div>
+            <div class="init-sub">TAP TO ACTIVATE CAMERA</div>
+          </div>
+
+          <div class="confidence-bar">
+            <div class="confidence-fill" id="confidenceFill"></div>
+          </div>
+        </div>
+        <div class="cam-footer">
+          <div class="scanning-pulse" id="scanningPulse">
+            <span>SCANNING</span>
+            <div class="dot-wave"><span></span><span></span><span></span></div>
+          </div>
+          <span class="scan-mode-badge" id="scanMode">DETECTING</span>
+          <span id="scanCount">0 SCANS</span>
+        </div>
+      </div>
+
+      <div class="right-panel">
+        <div class="verdict-card" id="verdictCard">
+          <div class="verdict-header">
+            <div class="verdict-icon" id="verdictIcon">🔍</div>
+            <div>
+              <div class="verdict-title">Document Status</div>
+              <div class="verdict-value" id="verdictValue">AWAITING SCAN</div>
+            </div>
+          </div>
+          <div class="verdict-checks">
+            <div class="check-row">
+              <span class="check-label">CHECKSUM · DOC NUM</span>
+              <span class="check-val pending" id="chk1">PENDING</span>
+            </div>
+            <div class="check-row">
+              <span class="check-label">CHECKSUM · DOB</span>
+              <span class="check-val pending" id="chk2">PENDING</span>
+            </div>
+            <div class="check-row">
+              <span class="check-label">CHECKSUM · EXPIRY</span>
+              <span class="check-val pending" id="chkExp">PENDING</span>
+            </div>
+            <div class="check-row">
+              <span class="check-label">CHECKSUM · COMPOSITE</span>
+              <span class="check-val pending" id="chkComp">PENDING</span>
+            </div>
+            <div class="check-row">
+              <span class="check-label">EXPIRY DATE</span>
+              <span class="check-val pending" id="chkExpiry">PENDING</span>
+            </div>
+            <div class="check-row">
+              <span class="check-label">FORMAT INTEGRITY</span>
+              <span class="check-val pending" id="chkFormat">PENDING</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="fields-card">
+          <div class="card-header">
+            <span>PARSED DATA</span>
+            <span id="docTypeLabel">—</span>
+          </div>
+          <div class="fields-grid">
+            <div class="field full">
+              <div class="field-label">FULL NAME</div>
+              <div class="field-value empty" id="fName">—</div>
+            </div>
+            <div class="field">
+              <div class="field-label">DOC NUMBER</div>
+              <div class="field-value empty" id="fDocNum">—</div>
+            </div>
+            <div class="field">
+              <div class="field-label">NATIONALITY</div>
+              <div class="field-value empty" id="fNat">—</div>
+            </div>
+            <div class="field">
+              <div class="field-label">DATE OF BIRTH</div>
+              <div class="field-value empty" id="fDob">—</div>
+            </div>
+            <div class="field">
+              <div class="field-label">GENDER</div>
+              <div class="field-value empty" id="fSex">—</div>
+            </div>
+            <div class="field">
+              <div class="field-label">EXPIRY DATE</div>
+              <div class="field-value empty" id="fExpiry">—</div>
+            </div>
+            <div class="field">
+              <div class="field-label">ISSUING COUNTRY</div>
+              <div class="field-value empty" id="fIssuer">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mrz-raw">
+          <div class="card-header">
+            <span>RAW MRZ OUTPUT</span>
+            <span id="mrzLineCount">— LINES</span>
+          </div>
+          <div class="mrz-lines" id="mrzRaw">AWAITING OPTICAL DATA<span class="blink">_</span></div>
+        </div>
+
+        <div class="history-section">
+          <div class="card-header">
+            <span>SCAN HISTORY</span>
+            <span id="historyCount">0 / 3</span>
+          </div>
+          <div class="history-list" id="historyList"></div>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:6px;">
+          <button onclick="testReal()"
+            style="flex:1;padding:8px 6px;background:rgba(0,255,157,0.08);border:1px solid var(--success);border-radius:6px;color:var(--success);font-family:var(--mono);font-size:0.55rem;letter-spacing:1px;cursor:pointer;">✅
+            TEST REAL</button>
+          <button onclick="testExpired()"
+            style="flex:1;padding:8px 6px;background:rgba(255,184,0,0.08);border:1px solid var(--warn);border-radius:6px;color:var(--warn);font-family:var(--mono);font-size:0.55rem;letter-spacing:1px;cursor:pointer;">⚠️
+            TEST EXPIRED</button>
+          <button onclick="testFake()"
+            style="flex:1;padding:8px 6px;background:rgba(255,59,59,0.08);border:1px solid var(--danger);border-radius:6px;color:var(--danger);font-family:var(--mono);font-size:0.55rem;letter-spacing:1px;cursor:pointer;">🚫
+            TEST FAKE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ================================================================
+    // COUNTRY CODE LOOKUP (50+ most common)
+    // ================================================================
+    var COUNTRY_NAMES = {
+      AFG: 'Afghanistan', ALB: 'Albania', DZA: 'Algeria', AND: 'Andorra', AGO: 'Angola',
+      ARG: 'Argentina', ARM: 'Armenia', AUS: 'Australia', AUT: 'Austria', AZE: 'Azerbaijan',
+      BHR: 'Bahrain', BGD: 'Bangladesh', BLR: 'Belarus', BEL: 'Belgium', BRA: 'Brazil',
+      BRN: 'Brunei', BGR: 'Bulgaria', KHM: 'Cambodia', CMR: 'Cameroon', CAN: 'Canada',
+      CHL: 'Chile', CHN: 'China', COL: 'Colombia', HRV: 'Croatia', CUB: 'Cuba',
+      CYP: 'Cyprus', CZE: 'Czech Republic', DNK: 'Denmark', DOM: 'Dominican Republic',
+      ECU: 'Ecuador', EGY: 'Egypt', SLV: 'El Salvador', EST: 'Estonia', ETH: 'Ethiopia',
+      FIN: 'Finland', FRA: 'France', GEO: 'Georgia', D: 'Germany', DEU: 'Germany',
+      GHA: 'Ghana', GRC: 'Greece', GTM: 'Guatemala', HND: 'Honduras', HKG: 'Hong Kong',
+      HUN: 'Hungary', ISL: 'Iceland', IND: 'India', IDN: 'Indonesia', IRN: 'Iran',
+      IRQ: 'Iraq', IRL: 'Ireland', ISR: 'Israel', ITA: 'Italy', JAM: 'Jamaica',
+      JPN: 'Japan', JOR: 'Jordan', KAZ: 'Kazakhstan', KEN: 'Kenya', KWT: 'Kuwait',
+      KGZ: 'Kyrgyzstan', LAO: 'Laos', LVA: 'Latvia', LBN: 'Lebanon', LBY: 'Libya',
+      LIE: 'Liechtenstein', LTU: 'Lithuania', LUX: 'Luxembourg', MAC: 'Macau',
+      MKD: 'North Macedonia', MYS: 'Malaysia', MDV: 'Maldives', MLT: 'Malta',
+      MEX: 'Mexico', MDA: 'Moldova', MCO: 'Monaco', MNG: 'Mongolia', MNE: 'Montenegro',
+      MAR: 'Morocco', MOZ: 'Mozambique', MMR: 'Myanmar', NAM: 'Namibia', NPL: 'Nepal',
+      NLD: 'Netherlands', NZL: 'New Zealand', NGA: 'Nigeria', NOR: 'Norway', OMN: 'Oman',
+      PAK: 'Pakistan', PAN: 'Panama', PRY: 'Paraguay', PER: 'Peru', PHL: 'Philippines',
+      POL: 'Poland', PRT: 'Portugal', QAT: 'Qatar', ROU: 'Romania', RUS: 'Russia',
+      SAU: 'Saudi Arabia', SRB: 'Serbia', SGP: 'Singapore', SVK: 'Slovakia',
+      SVN: 'Slovenia', ZAF: 'South Africa', KOR: 'South Korea', ESP: 'Spain',
+      LKA: 'Sri Lanka', SDN: 'Sudan', SWE: 'Sweden', CHE: 'Switzerland', SYR: 'Syria',
+      TWN: 'Taiwan', TJK: 'Tajikistan', TZA: 'Tanzania', THA: 'Thailand', TUN: 'Tunisia',
+      TUR: 'Turkey', TKM: 'Turkmenistan', UGA: 'Uganda', UKR: 'Ukraine',
+      ARE: 'United Arab Emirates', UAE: 'UAE',
+      GBR: 'United Kingdom', USA: 'United States', URY: 'Uruguay', UZB: 'Uzbekistan',
+      VEN: 'Venezuela', VNM: 'Vietnam', YEM: 'Yemen', ZMB: 'Zambia', ZWE: 'Zimbabwe',
+      XXA: 'Stateless', XXB: 'Refugee', XXC: 'Refugee', XXX: 'Unspecified',
+      UNO: 'United Nations', UNA: 'UN Agency', UNK: 'UN Kosovo',
+      EUE: 'European Union', XBA: 'African Dev Bank', XIM: 'African Union',
+      XCC: 'Caribbean Community', XCO: 'Common Market ESA', XEC: 'ECOWAS',
+      XPO: 'Interpol', XOM: 'Sov. Military Order Malta'
+    };
+
+    function getCountryName(code) {
+      if (!code) return '—';
+      var upper = code.toUpperCase().replace(/</g, '');
+      return COUNTRY_NAMES[upper] || upper;
+    }
+
+    // ================================================================
+    // MRZ CHECKSUM — mrzCheck (ICAO 9303)
+    // Single source of truth for all checksum validation
+    // Ported from mrz.html's proven checkDigit implementation
+    // ================================================================
+    function mrzCheck(s) {
+      var w = [7, 3, 1], sum = 0;
+      for (var i = 0; i < s.length; i++) {
+        var c = s[i], v = c === '<' ? 0 : c >= '0' && c <= '9' ? +c : c.charCodeAt(0) - 55;
+        sum += v * w[i % 3];
+      }
+      return sum % 10;
+    }
+
+    // cleanChk — no longer corrects OCR misreads
+    // A wrong check digit must FAIL, not be silently fixed
+    function cleanChk(c) {
+      if (!c) return 'X';
+      return (c + '').trim();
+    }
+
+    // Validate check: compute checkDigit on field, compare to raw digit
+    // NO OCR correction — a wrong digit means FAIL
+    function vc(fieldSlice, digitChar) {
+      if (!digitChar) return false;
+      var cleaned = (digitChar + '').trim();
+      var d = parseInt(cleaned, 10);
+      if (isNaN(d)) return false;
+      return mrzCheck(fieldSlice) === d;
+    }
+
+    // Legacy wrappers so existing parsers still work
+    function charVal(c) {
+      if (c === '<') return 0;
+      c = c.toUpperCase();
+      if (c >= '0' && c <= '9') return c.charCodeAt(0) - 48;
+      if (c >= 'A' && c <= 'Z') return c.charCodeAt(0) - 55;
+      return 0;
+    }
+    function checkDigit(str) { return mrzCheck(str); }
+    function validateCheck(str, digit) {
+      try {
+        return vc(str, digit);
+      } catch (e) { return false; }
+    }
+
+    // ================================================================
+    // validateMRZ — UNIFIED VALIDATION FOR ALL PATHS
+    // Uses vc() from mrz.html for robust check digit comparison
+    // Called by both camera scan renderResult AND test buttons
+    // ================================================================
+    function validateMRZ(lines) {
+      var results = { docNum: 'FAIL', dob: 'FAIL', expiry: 'FAIL', composite: 'FAIL' };
+      var expired = false;
+      var today = new Date();
+      if (!lines || lines.length < 2) {
+        return { results: results, fails: 4, expired: false, verdict: 'UNKNOWN' };
+      }
+
+      // ── NORMALIZE: clean + pad lines exactly like mrz.html does ──
+      // This is the critical fix: Dynamsoft may return lines slightly shorter
+      // than 44/36/30. Without padding, the length check fails and all checks
+      // silently default to FAIL→PASS (wrong). We must pad first.
+      var norm = lines.map(function (l) {
+        return (l || '').replace(/[^A-Z0-9<]/g, '').toUpperCase();
+      });
+
+      // Detect document type by line count + longest line length
+      var maxLen = Math.max.apply(null, norm.map(function (l) { return l.length; }));
+
+      // Auto-select format and pad to exact lengths
+      var docType = null;
+      if (norm.length >= 2 && maxLen >= 40) {
+        docType = 'TD3';
+        norm = norm.slice(0, 2).map(function (l) { return (l + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 44); });
+      } else if (norm.length >= 3 && maxLen >= 28) {
+        docType = 'TD1';
+        norm = norm.slice(0, 3).map(function (l) { return (l + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 30); });
+      } else if (norm.length >= 2 && maxLen >= 33) {
+        docType = 'TD2';
+        norm = norm.slice(0, 2).map(function (l) { return (l + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 36); });
+      } else {
+        // Can't determine type — fail safely
+        return { results: results, fails: 4, expired: false, verdict: 'UNKNOWN' };
+      }
+
+      console.log('[validateMRZ] type=' + docType + ' norm[0].len=' + norm[0].length + ' norm[1].len=' + norm[1].length);
+
+      if (docType === 'TD3') {
+        var L2 = norm[1];
+        results.docNum = vc(L2.slice(0, 9), L2[9]) ? 'PASS' : 'FAIL';
+        results.dob = vc(L2.slice(13, 19), L2[19]) ? 'PASS' : 'FAIL';
+        results.expiry = vc(L2.slice(21, 27), L2[27]) ? 'PASS' : 'FAIL';
+        if (norm[0][0] !== 'V') {
+          var cc = L2.slice(0, 10) + L2.slice(13, 20) + L2.slice(21, 43);
+          results.composite = vc(cc, L2[43]) ? 'PASS' : 'FAIL';
+        } else {
+          results.composite = 'PASS';
+        }
+        var eRaw = L2.slice(21, 27);
+        var yy = parseInt(eRaw.slice(0, 2), 10), mm = parseInt(eRaw.slice(2, 4), 10), dd = parseInt(eRaw.slice(4, 6), 10);
+        if (!isNaN(yy) && !isNaN(mm) && !isNaN(dd)) {
+          expired = new Date((yy < 30 ? 2000 : 1900) + yy, mm - 1, dd) < today;
+        }
+
+      } else if (docType === 'TD1') {
+        var L1 = norm[0], L2td1 = norm[1];
+        results.docNum = vc(L1.slice(5, 14), L1[14]) ? 'PASS' : 'FAIL';
+        results.dob = vc(L2td1.slice(0, 6), L2td1[6]) ? 'PASS' : 'FAIL';
+        results.expiry = vc(L2td1.slice(8, 14), L2td1[14]) ? 'PASS' : 'FAIL';
+        var comp1 = L1.slice(5, 30) + L2td1.slice(0, 7) + L2td1.slice(8, 15) + L2td1.slice(18, 29);
+        results.composite = vc(comp1, L2td1[29]) ? 'PASS' : 'FAIL';
+        var eRaw1 = L2td1.slice(8, 14);
+        var yy1 = parseInt(eRaw1.slice(0, 2), 10), mm1 = parseInt(eRaw1.slice(2, 4), 10), dd1 = parseInt(eRaw1.slice(4, 6), 10);
+        if (!isNaN(yy1) && !isNaN(mm1) && !isNaN(dd1)) {
+          expired = new Date((yy1 < 30 ? 2000 : 1900) + yy1, mm1 - 1, dd1) < today;
+        }
+
+      } else if (docType === 'TD2') {
+        var L2td2 = norm[1];
+        results.docNum = vc(L2td2.slice(0, 9), L2td2[9]) ? 'PASS' : 'FAIL';
+        results.dob = vc(L2td2.slice(13, 19), L2td2[19]) ? 'PASS' : 'FAIL';
+        results.expiry = vc(L2td2.slice(21, 27), L2td2[27]) ? 'PASS' : 'FAIL';
+        if (norm[0][0] !== 'V') {
+          var cc2 = L2td2.slice(0, 10) + L2td2.slice(13, 20) + L2td2.slice(21, 35);
+          results.composite = vc(cc2, L2td2[35]) ? 'PASS' : 'FAIL';
+        } else {
+          results.composite = 'PASS';
+        }
+        var eRaw2 = L2td2.slice(21, 27);
+        var yy2 = parseInt(eRaw2.slice(0, 2), 10), mm2 = parseInt(eRaw2.slice(2, 4), 10), dd2 = parseInt(eRaw2.slice(4, 6), 10);
+        if (!isNaN(yy2) && !isNaN(mm2) && !isNaN(dd2)) {
+          expired = new Date((yy2 < 30 ? 2000 : 1900) + yy2, mm2 - 1, dd2) < today;
+        }
+      }
+
+      var fails = Object.values(results).filter(function (v) { return v === 'FAIL'; }).length;
+      var verdict;
+      if (fails === 0 && !expired) verdict = 'AUTHENTIC ✅';
+      else if (fails === 0 && expired) verdict = 'EXPIRED ⚠️';
+      else verdict = 'FAKE / TAMPERED 🚫';
+
+      console.log('[validateMRZ] results:', JSON.stringify(results), 'fails:', fails, 'expired:', expired, 'verdict:', verdict);
+      return { results: results, fails: fails, expired: expired, verdict: verdict };
+    }
+
+    // ================================================================
+    // UNIVERSAL DATE HANDLING
+    // ================================================================
+    function parseDate(yymmdd) {
+      try {
+        if (!yymmdd || yymmdd.replace(/</g, '').length === 0) return null;
+        var cleaned = yymmdd.replace(/</g, '0');
+        var yy = parseInt(cleaned.slice(0, 2));
+        var mm = parseInt(cleaned.slice(2, 4));
+        var dd = parseInt(cleaned.slice(4, 6));
+        if (isNaN(yy) || isNaN(mm) || isNaN(dd)) return null;
+        if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return 'INVALID';
+        // YY 00-29 = 2000-2029, YY 30-99 = 1930-1999
+        var year = yy <= 29 ? 2000 + yy : 1900 + yy;
+        return new Date(year, mm - 1, dd);
+      } catch (e) { return null; }
+    }
+
+    function formatDate(yymmdd) {
+      try {
+        var d = parseDate(yymmdd);
+        if (d === 'INVALID') return 'INVALID DATE';
+        if (!d) return '—';
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      } catch (e) { return 'INVALID DATE'; }
+    }
+
+    function isExpired(yymmdd) {
+      try {
+        var d = parseDate(yymmdd);
+        if (!d || d === 'INVALID') return false;
+        return d < new Date();
+      } catch (e) { return false; }
+    }
+
+    // ================================================================
+    // UNIVERSAL NAME PARSING
+    // ================================================================
+    function parseName(raw) {
+      try {
+        var trimmed = raw.replace(/<+$/g, '');
+        var parts = trimmed.split('<<');
+        var surname = (parts[0] || '').replace(/</g, ' ').trim();
+        var givenParts = parts.slice(1).join(' ').replace(/</g, ' ').trim();
+        // Keep single-character names (some cultures have them)
+        surname = surname.split(/\s+/).filter(function (w) { return w.length >= 1; }).join(' ');
+        givenParts = givenParts.split(/\s+/).filter(function (w) { return w.length >= 1; }).join(' ');
+        return { surname: surname, given: givenParts };
+      } catch (e) { return { surname: '', given: '' }; }
+    }
+
+    // ================================================================
+    // UNIVERSAL GENDER HANDLING
+    // ================================================================
+    function parseGender(ch) {
+      if (ch === 'M') return 'MALE';
+      if (ch === 'F') return 'FEMALE';
+      return 'UNSPECIFIED'; // covers <, X, or anything else
+    }
+
+    // ================================================================
+    // TD3 — PASSPORT (2 lines × 44 chars)
+    // Line 1 starts with P< or P
+    // ================================================================
+    function parseTD3(lines) {
+      try {
+        var l1 = lines[0], l2 = lines[1];
+        if (!l1 || !l2 || l1.length < 44 || l2.length < 44) return null;
+        var issuer = l1.slice(2, 5).replace(/</g, '');
+        var nm = parseName(l1.slice(5, 44));
+        var docNum = l2.slice(0, 9);
+        var docNumCheck = l2[9];
+        var nationality = l2.slice(10, 13).replace(/</g, '');
+        var dob = l2.slice(13, 19);
+        var dobCheck = l2[19];
+        var sex = parseGender(l2[20]);
+        var expiry = l2.slice(21, 27);
+        var expiryCheck = l2[27];
+        var personalNum = l2.slice(28, 42);
+        var personalNumCheck = l2[42];
+        var compositeStr = l2.slice(0, 10) + l2.slice(13, 20) + l2.slice(21, 43);
+        var compositeCheck = l2[43];
+        var checks = {
+          docNum: validateCheck(docNum, docNumCheck),
+          dob: validateCheck(dob, dobCheck),
+          expiry: validateCheck(expiry, expiryCheck),
+          composite: validateCheck(compositeStr, compositeCheck)
+        };
+        return {
+          type: 'TD3', docLabel: 'PASSPORT', issuer: issuer,
+          surname: nm.surname, given: nm.given,
+          docNum: docNum.replace(/</g, ''), nationality: nationality, dob: dob,
+          sex: sex, expiry: expiry, checks: checks, expired: isExpired(expiry)
+        };
+      } catch (e) { return null; }
+    }
+
+    // ================================================================
+    // TD1 — ID CARD (3 lines × 30 chars)
+    // Line 1 starts with I, A, or C
+    // ================================================================
+    function parseTD1(lines) {
+      try {
+        var l1 = lines[0], l2 = lines[1], l3 = lines[2];
+        if (!l1 || !l2 || !l3 || l1.length < 30 || l2.length < 30 || l3.length < 30) return null;
+        var issuer = l1.slice(2, 5).replace(/</g, '');
+        var docNum = l1.slice(5, 14);
+        var docNumCheck = l1[14];
+        var optionalData1 = l1.slice(15, 30);
+        var dob = l2.slice(0, 6);
+        var dobCheck = l2[6];
+        var sex = parseGender(l2[7]);
+        var expiry = l2.slice(8, 14);
+        var expiryCheck = l2[14];
+        var nationality = l2.slice(15, 18).replace(/</g, '');
+        var optionalData2 = l2.slice(18, 29);
+        var overallCheck = l2[29];
+        var nm = parseName(l3.slice(0, 30));
+        var compositeStr = l1.slice(5, 30) + l2.slice(0, 7) + l2.slice(8, 15) + l2.slice(18, 29);
+        var checks = {
+          docNum: validateCheck(docNum, docNumCheck),
+          dob: validateCheck(dob, dobCheck),
+          expiry: validateCheck(expiry, expiryCheck),
+          composite: validateCheck(compositeStr, overallCheck)
+        };
+        return {
+          type: 'TD1', docLabel: 'ID CARD', issuer: issuer,
+          surname: nm.surname, given: nm.given,
+          docNum: docNum.replace(/</g, ''), nationality: nationality, dob: dob,
+          sex: sex, expiry: expiry, checks: checks, expired: isExpired(expiry)
+        };
+      } catch (e) { return null; }
+    }
+
+    // ================================================================
+    // TD2 — ID CARD (2 lines × 36 chars)
+    // Line 1 starts with I or A
+    // ================================================================
+    function parseTD2(lines) {
+      try {
+        var l1 = lines[0], l2 = lines[1];
+        if (!l1 || !l2 || l1.length < 36 || l2.length < 36) return null;
+        var firstChar = l1[0];
+        if (firstChar !== 'I' && firstChar !== 'A' && firstChar !== 'C') return null;
+        var issuer = l1.slice(2, 5).replace(/</g, '');
+        var nm = parseName(l1.slice(5, 36));
+        var docNum = l2.slice(0, 9);
+        var docNumCheck = l2[9];
+        var nationality = l2.slice(10, 13).replace(/</g, '');
+        var dob = l2.slice(13, 19);
+        var dobCheck = l2[19];
+        var sex = parseGender(l2[20]);
+        var expiry = l2.slice(21, 27);
+        var expiryCheck = l2[27];
+        var optionalData = l2.slice(28, 35);
+        var compositeCheck = l2[35];
+        var compositeStr = l2.slice(0, 10) + l2.slice(13, 20) + l2.slice(21, 35);
+        var checks = {
+          docNum: validateCheck(docNum, docNumCheck),
+          dob: validateCheck(dob, dobCheck),
+          expiry: validateCheck(expiry, expiryCheck),
+          composite: validateCheck(compositeStr, compositeCheck)
+        };
+        return {
+          type: 'TD2', docLabel: 'ID CARD', issuer: issuer,
+          surname: nm.surname, given: nm.given,
+          docNum: docNum.replace(/</g, ''), nationality: nationality, dob: dob,
+          sex: sex, expiry: expiry, checks: checks, expired: isExpired(expiry)
+        };
+      } catch (e) { return null; }
+    }
+
+    // ================================================================
+    // MRV-A — VISA (2 lines × 44 chars)
+    // Line 1 starts with V
+    // ================================================================
+    function parseMRVA(lines) {
+      try {
+        var l1 = lines[0], l2 = lines[1];
+        if (!l1 || !l2 || l1.length < 44 || l2.length < 44) return null;
+        if (l1[0] !== 'V') return null;
+        var issuer = l1.slice(2, 5).replace(/</g, '');
+        var nm = parseName(l1.slice(5, 44));
+        var docNum = l2.slice(0, 9);
+        var docNumCheck = l2[9];
+        var nationality = l2.slice(10, 13).replace(/</g, '');
+        var dob = l2.slice(13, 19);
+        var dobCheck = l2[19];
+        var sex = parseGender(l2[20]);
+        var expiry = l2.slice(21, 27);
+        var expiryCheck = l2[27];
+        // MRV-A has no composite check digit — optional data fills positions 28-43
+        var checks = {
+          docNum: validateCheck(docNum, docNumCheck),
+          dob: validateCheck(dob, dobCheck),
+          expiry: validateCheck(expiry, expiryCheck),
+          composite: true // no composite check for visas
+        };
+        return {
+          type: 'MRV-A', docLabel: 'VISA', issuer: issuer,
+          surname: nm.surname, given: nm.given,
+          docNum: docNum.replace(/</g, ''), nationality: nationality, dob: dob,
+          sex: sex, expiry: expiry, checks: checks, expired: isExpired(expiry)
+        };
+      } catch (e) { return null; }
+    }
+
+    // ================================================================
+    // MRV-B — VISA (2 lines × 36 chars)
+    // Line 1 starts with V
+    // ================================================================
+    function parseMRVB(lines) {
+      try {
+        var l1 = lines[0], l2 = lines[1];
+        if (!l1 || !l2 || l1.length < 36 || l2.length < 36) return null;
+        if (l1[0] !== 'V') return null;
+        var issuer = l1.slice(2, 5).replace(/</g, '');
+        var nm = parseName(l1.slice(5, 36));
+        var docNum = l2.slice(0, 9);
+        var docNumCheck = l2[9];
+        var nationality = l2.slice(10, 13).replace(/</g, '');
+        var dob = l2.slice(13, 19);
+        var dobCheck = l2[19];
+        var sex = parseGender(l2[20]);
+        var expiry = l2.slice(21, 27);
+        var expiryCheck = l2[27];
+        // MRV-B has no composite check digit — optional data fills positions 28-35
+        var checks = {
+          docNum: validateCheck(docNum, docNumCheck),
+          dob: validateCheck(dob, dobCheck),
+          expiry: validateCheck(expiry, expiryCheck),
+          composite: true // no composite check for visas
+        };
+        return {
+          type: 'MRV-B', docLabel: 'VISA', issuer: issuer,
+          surname: nm.surname, given: nm.given,
+          docNum: docNum.replace(/</g, ''), nationality: nationality, dob: dob,
+          sex: sex, expiry: expiry, checks: checks, expired: isExpired(expiry)
+        };
+      } catch (e) { return null; }
+    }
+
+    // ================================================================
+    // UNIVERSAL DOCUMENT TYPE DETECTION & PARSING
+    // Auto-detects from line length + first character
+    // ================================================================
+    function tryParse(lines) {
+      try {
+        if (!lines || lines.length === 0) return null;
+
+        // Normalize lines: trim whitespace, uppercase
+        var cleaned = lines.map(function (l) {
+          return l.trim().toUpperCase();
+        }).filter(function (l) {
+          return l.length >= 20;
+        });
+
+        if (cleaned.length === 0) return null;
+
+        // Group lines by their length
+        var l44 = cleaned.filter(function (l) { return l.length >= 43 && l.length <= 45; });
+        var l36 = cleaned.filter(function (l) { return l.length >= 35 && l.length <= 37; });
+        var l30 = cleaned.filter(function (l) { return l.length >= 29 && l.length <= 31; });
+
+        // Pad/trim lines to exact expected lengths
+        l44 = l44.map(function (l) { return (l + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 44); });
+        l36 = l36.map(function (l) { return (l + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 36); });
+        l30 = l30.map(function (l) { return (l + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 30); });
+
+        var result = null;
+        var bestScore = -1;
+
+        // === Try 44-char lines (TD3 Passport, MRV-A Visa) ===
+        if (l44.length >= 2) {
+          for (var i = 0; i < l44.length - 1 && !result; i++) {
+            var pair = [l44[i], l44[i + 1]];
+            var fc = pair[0][0];
+
+            // MRV-A Visa: starts with V
+            if (fc === 'V') {
+              var va = parseMRVA(pair);
+              if (va) { result = va; break; }
+            }
+            // TD3 Passport: starts with P
+            if (fc === 'P') {
+              var td3 = parseTD3(pair);
+              if (td3) {
+                var score = Object.values(td3.checks).filter(function (v) { return v; }).length;
+                if (score > bestScore) { bestScore = score; result = td3; }
+              }
+            }
+          }
+          // If no first-char match, try TD3 anyway (some OCR may garble first char)
+          if (!result && l44.length >= 2) {
+            var td3f = parseTD3([l44[0], l44[1]]);
+            if (td3f && (td3f.checks.docNum || td3f.checks.dob)) result = td3f;
+          }
+        }
+
+        // === Try 36-char lines (TD2 ID, MRV-B Visa) ===
+        if (!result && l36.length >= 2) {
+          for (var i2 = 0; i2 < l36.length - 1 && !result; i2++) {
+            var pair2 = [l36[i2], l36[i2 + 1]];
+            var fc2 = pair2[0][0];
+
+            // MRV-B Visa: starts with V
+            if (fc2 === 'V') {
+              var vb = parseMRVB(pair2);
+              if (vb) { result = vb; break; }
+            }
+            // TD2: starts with I, A, or C
+            if (fc2 === 'I' || fc2 === 'A' || fc2 === 'C') {
+              var td2 = parseTD2(pair2);
+              if (td2) { result = td2; break; }
+            }
+          }
+          // Fallback: try TD2 regardless of first char
+          if (!result && l36.length >= 2) {
+            var td2f = parseTD2([l36[0], l36[1]]);
+            if (td2f && (td2f.checks.docNum || td2f.checks.dob)) result = td2f;
+          }
+        }
+
+        // === Try 30-char lines (TD1 ID Card — 3 lines) ===
+        if (!result && l30.length >= 3) {
+          var td1 = parseTD1([l30[0], l30[1], l30[2]]);
+          if (td1) result = td1;
+        }
+
+        // === Partial scan handling ===
+        if (!result && cleaned.length === 1) {
+          return {
+            type: 'PARTIAL', docLabel: 'PARTIAL SCAN',
+            issuer: '', surname: '', given: '',
+            docNum: '', nationality: '', dob: '',
+            sex: '', expiry: '',
+            checks: { docNum: false, dob: false, expiry: false, composite: false },
+            expired: false,
+            _partial: true,
+            _message: 'PARTIAL SCAN — ALIGN DOCUMENT'
+          };
+        }
+
+        return result;
+      } catch (e) {
+        console.error('Parse error:', e);
+        return null;
+      }
+    }
+
+    // ================================================================
+    // UI HELPERS
+    // ================================================================
+    function setStatus(state, text) {
+      document.getElementById('statusDot').className = 'status-dot ' + state;
+      document.getElementById('statusText').textContent = text;
+    }
+
+    function showToast(msg, color) {
+      color = color || 'var(--accent)';
+      var t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.borderColor = color;
+      t.style.color = color;
+      t.classList.add('show');
+      setTimeout(function () { t.classList.remove('show'); }, 3000);
+    }
+
+    function setCheck(id, state, label) {
+      var el = document.getElementById(id);
+      el.className = 'check-val ' + state;
+      el.textContent = label;
+    }
+
+    function setField(id, val) {
+      var el = document.getElementById(id);
+      el.textContent = val || '—';
+      el.className = 'field-value' + (val ? '' : ' empty');
+    }
+
+    // ================================================================
+    // HISTORY
+    // ================================================================
+    var scanHistory = [];
+
+    function addToHistory(data) {
+      if (data._partial) return; // don't add partial scans
+      var failCount = Object.values(data.checks).filter(function (v) { return !v; }).length;
+      var status = 'valid';
+      if (failCount >= 2) status = 'fake';
+      else if (failCount === 1) status = 'suspicious';
+      else if (data.expired) status = 'expired';
+      var entry = {
+        name: data.surname + (data.given ? ', ' + data.given : ''),
+        type: data.type,
+        docNum: data.docNum,
+        time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        status: status,
+        data: data
+      };
+      scanHistory.unshift(entry);
+      if (scanHistory.length > 3) scanHistory.pop();
+      renderHistory();
+    }
+
+    function renderHistory() {
+      var list = document.getElementById('historyList');
+      document.getElementById('historyCount').textContent = scanHistory.length + ' / 3';
+      list.innerHTML = '';
+      scanHistory.forEach(function (e, i) {
+        var icons = { valid: '✅', fake: '🚫', expired: '⚠️', suspicious: '⚠️' };
+        var item = document.createElement('div');
+        item.className = 'history-item';
+        item.onclick = function () { renderResult(scanHistory[i].data, []); };
+        item.innerHTML =
+          '<div class="history-badge ' + e.status + '">' + icons[e.status] + '</div>' +
+          '<div class="history-info">' +
+          '<div class="history-name">' + e.name + '</div>' +
+          '<div class="history-meta">' + e.type + ' · ' + e.docNum + ' · ' + e.time + '</div>' +
+          '</div>';
+        list.appendChild(item);
+      });
+    }
+
+    // ================================================================
+    // RENDER RESULT
+    // ================================================================
+    function renderResult(data, rawLines) {
+      try {
+        var rawEl = document.getElementById('mrzRaw');
+        if (rawLines && rawLines.length) {
+          rawEl.innerHTML = rawLines.join('<br>');
+          rawEl.className = 'mrz-lines has-data';
+          document.getElementById('mrzLineCount').textContent = rawLines.length + ' LINES';
+        }
+
+        if (!data) {
+          document.getElementById('verdictValue').textContent = 'NO MRZ DETECTED';
+          document.getElementById('scanMode').textContent = 'DETECTING';
+          document.getElementById('scanMode').className = 'scan-mode-badge';
+          return;
+        }
+
+        // Handle partial scan
+        if (data._partial) {
+          document.getElementById('verdictValue').textContent = data._message || 'PARTIAL SCAN — ALIGN DOCUMENT';
+          document.getElementById('scanMode').textContent = 'PARTIAL';
+          document.getElementById('scanMode').className = 'scan-mode-badge';
+          var card = document.getElementById('verdictCard');
+          card.className = 'verdict-card';
+          document.getElementById('verdictIcon').textContent = '⚠️';
+          setCheck('chk1', 'pending', 'PENDING');
+          setCheck('chk2', 'pending', 'PENDING');
+          setCheck('chkExp', 'pending', 'PENDING');
+          setCheck('chkComp', 'pending', 'PENDING');
+          setCheck('chkExpiry', 'pending', 'PENDING');
+          setCheck('chkFormat', 'warn', 'PARTIAL');
+          showToast('⚠ PARTIAL SCAN — ALIGN DOCUMENT PROPERLY', 'var(--warn)');
+          return;
+        }
+
+        var docLabel = data.docLabel || data.type;
+        var badge = document.getElementById('scanMode');
+        badge.textContent = docLabel;
+        // color-code by document type
+        var typeClass = 'td3';
+        if (data.type === 'TD1') typeClass = 'td1';
+        else if (data.type === 'TD2') typeClass = 'td2';
+        else if (data.type === 'MRV-A' || data.type === 'MRV-B') typeClass = 'mrv';
+        badge.className = 'scan-mode-badge ' + typeClass;
+        document.getElementById('docTypeLabel').textContent = docLabel + ' (' + data.type + ')';
+
+        var fullName = ((data.given || '') + ' ' + (data.surname || '')).trim();
+        setField('fName', fullName || '—');
+        setField('fDocNum', data.docNum || '—');
+
+        // Show full country name for nationality and issuer
+        var natDisplay = data.nationality ? getCountryName(data.nationality) + ' (' + data.nationality + ')' : '—';
+        var issDisplay = data.issuer ? getCountryName(data.issuer) + ' (' + data.issuer + ')' : '—';
+        setField('fNat', natDisplay);
+        setField('fDob', formatDate(data.dob));
+        setField('fSex', data.sex || '—');
+        setField('fExpiry', formatDate(data.expiry));
+        setField('fIssuer', issDisplay);
+
+        // ============================================================
+        // FAKE DETECTION — run validateMRZ on raw lines
+        // ============================================================
+        var validation = validateMRZ(rawLines && rawLines.length >= 2 ? rawLines : (window._lastMrzLines || []));
+        console.log('[VALIDATE] rawLines:', rawLines ? rawLines.length : 0, 'using:', rawLines && rawLines.length >= 2 ? 'rawLines' : '_lastMrzLines', validation);
+
+        // Display individual checksum breakdown
+        setCheck('chk1', validation.results.docNum === 'PASS' ? 'ok' : 'fail',
+          validation.results.docNum === 'PASS' ? '● PASS' : '● FAIL');
+        setCheck('chk2', validation.results.dob === 'PASS' ? 'ok' : 'fail',
+          validation.results.dob === 'PASS' ? '● PASS' : '● FAIL');
+        setCheck('chkExp', validation.results.expiry === 'PASS' ? 'ok' : 'fail',
+          validation.results.expiry === 'PASS' ? '● PASS' : '● FAIL');
+        setCheck('chkComp', validation.results.composite === 'PASS' ? 'ok' : 'fail',
+          validation.results.composite === 'PASS' ? '● PASS' : '● FAIL');
+        setCheck('chkExpiry', validation.expired ? 'warn' : 'ok',
+          validation.expired ? '● EXPIRED' : '● VALID');
+        setCheck('chkFormat', 'ok', '● ' + data.type);
+
+        var card = document.getElementById('verdictCard');
+        var icon = document.getElementById('verdictIcon');
+        var val = document.getElementById('verdictValue');
+        var zone = document.getElementById('scanZone');
+
+        // ============================================================
+        // VERDICT — uses validateMRZ result directly
+        // ============================================================
+        if (validation.fails >= 1) {
+          // FAKE / TAMPERED — any checksum failure
+          card.className = 'verdict-card fake';
+          icon.textContent = '🚫';
+          val.textContent = 'FAKE / TAMPERED';
+          zone.className = 'scan-zone active fake';
+          showToast('🚫 FAKE — ' + validation.fails + ' CHECKSUM FAILURE(S)', 'var(--danger)');
+        } else if (validation.expired) {
+          // EXPIRED — all checksums pass but document expired
+          card.className = 'verdict-card expired';
+          icon.textContent = '⚠️';
+          val.textContent = 'EXPIRED DOCUMENT';
+          zone.className = 'scan-zone active';
+          showToast('⚠ EXPIRED DOCUMENT — ALL CHECKSUMS VALID', 'var(--warn)');
+        } else {
+          // AUTHENTIC — 0 failures and not expired
+          card.className = 'verdict-card valid';
+          icon.textContent = '✅';
+          val.textContent = 'AUTHENTIC';
+          zone.className = 'scan-zone active locked';
+          showToast('✓ AUTHENTIC — ALL CHECKS PASSED', 'var(--accent2)');
+        }
+      } catch (e) {
+        console.error('Render error:', e);
+        document.getElementById('verdictValue').textContent = 'DISPLAY ERROR';
+      }
+    }
+
+    // ================================================================
+    // TD1 LINE CORRECTION — Dynamsoft misreads first chars
+    // ================================================================
+    function correctMrzLines(lines) {
+      if (!lines || lines.length === 0) return lines;
+      var corrected = lines.slice(); // copy
+      var first = corrected[0];
+      if (first && first.length >= 2) {
+        var prefix = first.substring(0, 2).toUpperCase();
+        // Dynamsoft reads TD1 'I<' as C1, C2, C3, CI, CL etc.
+        if (prefix === 'C1' || prefix === 'C2' || prefix === 'C3' || prefix === 'CI' || prefix === 'CL') {
+          corrected[0] = 'I<' + first.substring(2);
+          console.log('[MRZ CORRECT] Fixed prefix ' + prefix + ' → I<');
+        }
+        // A1, A2 → A<
+        else if (prefix === 'A1' || prefix === 'A2') {
+          corrected[0] = 'A<' + first.substring(2);
+          console.log('[MRZ CORRECT] Fixed prefix ' + prefix + ' → A<');
+        }
+      }
+      return corrected;
+    }
+
+    // ================================================================
+    // TEST BUTTONS — all use the SAME validateMRZ() as camera scan
+    // ================================================================
+    function runTest(line1, line2, label) {
+      var lines = [
+        (line1 + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 44),
+        (line2 + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 44)
+      ];
+      console.log('[TEST ' + label + '] Lines:', lines);
+
+      // Run the SAME validateMRZ used by camera
+      var v = validateMRZ(lines);
+      console.log('[TEST ' + label + '] Result:', v);
+
+      // Display raw MRZ
+      document.getElementById('mrzRaw').innerHTML = lines.join('<br>');
+      document.getElementById('mrzRaw').className = 'mrz-lines has-data';
+      document.getElementById('mrzLineCount').textContent = '2 LINES';
+
+      // Parse for field extraction, then render with validateMRZ verdict
+      var parsed = tryParse(lines);
+      if (parsed) {
+        parsed.checks = {
+          docNum: v.results.docNum === 'PASS',
+          dob: v.results.dob === 'PASS',
+          expiry: v.results.expiry === 'PASS',
+          composite: v.results.composite === 'PASS'
+        };
+        parsed.expired = v.expired;
+        scanCount++;
+        document.getElementById('scanCount').textContent = scanCount + ' SCANS';
+        addToHistory(parsed);
+        renderResult(parsed, lines);
+      } else {
+        // Direct UI update if parse fails
+        setCheck('chk1', v.results.docNum === 'PASS' ? 'ok' : 'fail', '● ' + (v.results.docNum || 'N/A'));
+        setCheck('chk2', v.results.dob === 'PASS' ? 'ok' : 'fail', '● ' + (v.results.dob || 'N/A'));
+        setCheck('chkExp', v.results.expiry === 'PASS' ? 'ok' : 'fail', '● ' + (v.results.expiry || 'N/A'));
+        setCheck('chkComp', v.results.composite === 'PASS' ? 'ok' : 'fail', '● ' + (v.results.composite || 'N/A'));
+        setCheck('chkExpiry', v.expired ? 'warn' : 'ok', v.expired ? '● EXPIRED' : '● VALID');
+        setCheck('chkFormat', 'ok', '● TD3');
+        var card = document.getElementById('verdictCard');
+        var icon = document.getElementById('verdictIcon');
+        var val = document.getElementById('verdictValue');
+        if (v.fails >= 1) {
+          card.className = 'verdict-card fake'; icon.textContent = '🚫'; val.textContent = 'FAKE / TAMPERED';
+        } else if (v.expired) {
+          card.className = 'verdict-card expired'; icon.textContent = '⚠️'; val.textContent = 'EXPIRED DOCUMENT';
+        } else {
+          card.className = 'verdict-card valid'; icon.textContent = '✅'; val.textContent = 'AUTHENTIC';
+        }
+        document.getElementById('scanMode').textContent = 'PASSPORT';
+        document.getElementById('scanMode').className = 'scan-mode-badge td3';
+        document.getElementById('docTypeLabel').textContent = 'PASSPORT (TD3)';
+      }
+      showToast(v.verdict, v.fails >= 1 ? 'var(--danger)' : v.expired ? 'var(--warn)' : 'var(--accent2)');
+    }
+
+    function testReal() {
+      runTest(
+        'P<INDMAHAJAN<<DEEPAK<<<<<<<<<<<<<<<<<<<<<<<<',
+        'P5745596<6IND8008024M2611206<<<<<<<<<<<<<<0',
+        'REAL'
+      );
+    }
+
+    function testExpired() {
+      runTest(
+        'P<INDMAHAJAN<<DEEPAK<<<<<<<<<<<<<<<<<<<<<<<<',
+        'P5745596<6IND8008024M2001206<<<<<<<<<<<<<<4',
+        'EXPIRED'
+      );
+    }
+
+    function testFake() {
+      runTest(
+        'P<INDMAHAJAN<<DEEPAK<<<<<<<<<<<<<<<<<<<<<<<<',
+        'P574559619IND8008024M2611206<<<<<<<<<<<<<<9',
+        'FAKE'
+      );
+    }
+
+    // ================================================================
+    // DYNAMSOFT LABEL RECOGNIZER - MRZ ENGINE
+    // ================================================================
+    var recognizer = null;
+    var scanCount = 0;
+    var isProcessing = false;
+    var scanTimer = null;
+    window._lastMrzLines = [];
+
+    // Set engine resource path for WASM files
+    Dynamsoft.DLR.LabelRecognizer.initLicense("DLS2eyJoYW5kc2hha2VDb2RlIjoiMTA1NDEwNjQ5LU1UQTFOREV3TmpRNUxYZGxZaTFVY21saGJGQnliMm8iLCJtYWluU2VydmVyVVJMIjoiaHR0cHM6Ly9tZGxzLmR5bmFtc29mdG9ubGluZS5jb20vIiwib3JnYW5pemF0aW9uSUQiOiIxMDU0MTA2NDkiLCJzdGFuZGJ5U2VydmVyVVJMIjoiaHR0cHM6Ly9zZGxzLmR5bmFtc29mdG9ubGluZS5jb20vIiwiY2hlY2tDb2RlIjotMTg1MTU3NDg4M30=");
+    Dynamsoft.DLR.LabelRecognizer.engineResourcePath = 'https://cdn.jsdelivr.net/npm/dynamsoft-label-recognizer@2.2.31/dist/';
+
+    async function initRecognizer() {
+      setStatus('scanning', 'LOADING MRZ ENGINE');
+      try {
+        recognizer = await Dynamsoft.DLR.LabelRecognizer.createInstance();
+        await recognizer.updateRuntimeSettingsFromString('MRZ');
+        setStatus('active', 'MRZ ENGINE READY');
+        showToast('DYNAMSOFT MRZ ENGINE LOADED');
+        return true;
+      } catch (e) {
+        console.error('DLR init error:', e);
+        setStatus('error', 'ENGINE INIT FAILED');
+        showToast('ENGINE INIT FAILED: ' + (e.message || e), 'var(--danger)');
+        return false;
+      }
+    }
+
+    async function startScanner() {
+      var initScreen = document.getElementById('initScreen');
+      initScreen.innerHTML = '<div class="spinner"></div><div class="init-sub">LOADING MRZ ENGINE...</div>';
+
+      var ok = await initRecognizer();
+      if (!ok) {
+        initScreen.innerHTML = '<div class="init-text" style="color:var(--danger)">ENGINE FAILED</div><div class="init-sub">Check browser console</div>';
+        return;
+      }
+
+      try {
+        var stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        var video = document.getElementById('video');
+        video.srcObject = stream;
+        await video.play();
+        initScreen.classList.add('hidden');
+        document.getElementById('scanZone').classList.add('active');
+        setStatus('active', 'LIVE — SCANNING');
+        startScanLoop();
+      } catch (e) {
+        setStatus('error', 'CAMERA DENIED');
+        initScreen.innerHTML = '<div class="init-text" style="color:var(--danger)">CAMERA ACCESS DENIED</div><div class="init-sub">' + e.message + '</div>';
+      }
+    }
+
+    function startScanLoop() {
+      scanTimer = setInterval(processFrame, 800);
+    }
+
+    async function processFrame() {
+      if (isProcessing || !recognizer) return;
+      var video = document.getElementById('video');
+      if (video.readyState < 2) return;
+
+      isProcessing = true;
+      setStatus('scanning', 'SCANNING');
+      document.getElementById('scanningPulse').classList.add('active');
+      document.getElementById('scanStatus').textContent = 'RECOGNIZING...';
+
+      try {
+        // Dynamsoft recognizes directly from the video element
+        var results = await recognizer.recognize(video);
+
+        document.getElementById('scanningPulse').classList.remove('active');
+
+        if (!results || results.length === 0) {
+          document.getElementById('scanStatus').textContent = 'NO MRZ DETECTED';
+          setStatus('active', 'SCANNING');
+          isProcessing = false;
+          return;
+        }
+
+        // Extract MRZ line texts from Dynamsoft results + log everything
+        var mrzLines = [];
+        for (var i = 0; i < results.length; i++) {
+          var lineResults = results[i].lineResults;
+          console.log('[DLR] Result ' + i + ': lineResults count =', lineResults ? lineResults.length : 0);
+          if (lineResults) {
+            for (var j = 0; j < lineResults.length; j++) {
+              var text = lineResults[j].text;
+              var conf = lineResults[j].confidence || 0;
+              console.log('[DLR] Line ' + j + ' (conf:' + conf + '): "' + text + '" (len:' + (text ? text.length : 0) + ')');
+              if (text && text.length >= 20) {
+                mrzLines.push(text);
+              }
+            }
+          }
+        }
+
+        console.log('[DLR] Extracted ' + mrzLines.length + ' MRZ lines:', mrzLines);
+
+        if (mrzLines.length === 0) {
+          document.getElementById('scanStatus').textContent = 'NO VALID LINES';
+          setStatus('active', 'SCANNING');
+          isProcessing = false;
+          return;
+        }
+
+        // Correct TD1 first-line misreads from Dynamsoft
+        mrzLines = correctMrzLines(mrzLines);
+        window._lastMrzLines = mrzLines;
+        console.log('[DLR] After correction:', mrzLines);
+
+        // Display raw MRZ lines
+        document.getElementById('mrzRaw').innerHTML = mrzLines.join('<br>');
+        document.getElementById('mrzRaw').className = 'mrz-lines has-data';
+        document.getElementById('mrzLineCount').textContent = mrzLines.length + ' LINES';
+
+        // Parse MRZ lines into fields
+        var parsed = tryParse(mrzLines);
+        console.log('[DLR] Parse result:', parsed ? parsed.type + ' — checks:' + JSON.stringify(parsed.checks) : 'null');
+
+        if (parsed) {
+          // Handle partial scan
+          if (parsed._partial) {
+            renderResult(parsed, mrzLines);
+            document.getElementById('scanStatus').textContent = 'PARTIAL — ALIGN DOCUMENT';
+            setStatus('scanning', 'PARTIAL');
+            isProcessing = false;
+            return;
+          }
+
+          // ============================================================
+          // ALWAYS validate + render on every scan — NO CACHING
+          // validateMRZ recalculates all checksums from raw lines fresh
+          // ============================================================
+          scanCount++;
+          document.getElementById('scanCount').textContent = scanCount + ' SCANS';
+          addToHistory(parsed);
+          renderResult(parsed, mrzLines); // renderResult calls validateMRZ internally
+          setStatus('active', 'SCAN COMPLETE');
+          document.getElementById('scanStatus').textContent = parsed.type + ' DECODED ✓';
+
+          // Update confidence bar from validateMRZ result
+          var v = validateMRZ(mrzLines);
+          var checksPassed = Object.values(v.results).filter(function (x) { return x === 'PASS'; }).length;
+          document.getElementById('confidenceFill').style.width = (checksPassed / 4 * 100) + '%';
+        } else {
+          document.getElementById('scanStatus').textContent = mrzLines.length + ' LINES — PARSE FAILED';
+          setStatus('scanning', 'PARSING');
+          console.warn('[DLR] Parse returned null for lines:', mrzLines);
+        }
+      } catch (e) {
+        console.error('Recognition error:', e);
+        document.getElementById('scanStatus').textContent = 'OCR ERROR';
+        document.getElementById('scanningPulse').classList.remove('active');
+      }
+
+      isProcessing = false;
+    }
+  </script>
+</body>
+
+</html>
