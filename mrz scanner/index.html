@@ -973,6 +973,16 @@
           <span class="scan-mode-badge" id="scanMode">DETECTING</span>
           <span id="scanCount">0 SCANS</span>
         </div>
+
+        <!-- TEST BUTTONS below camera, left side -->
+        <div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border);background:var(--surface);">
+          <button onclick="testReal()"
+            style="flex:1;padding:9px 4px;background:rgba(0,255,157,0.08);border:1px solid var(--success);border-radius:7px;color:var(--success);font-family:var(--mono);font-size:0.6rem;letter-spacing:1.5px;cursor:pointer;font-weight:600;">&#x2705; TEST REAL</button>
+          <button onclick="testExpired()"
+            style="flex:1;padding:9px 4px;background:rgba(255,184,0,0.08);border:1px solid var(--warn);border-radius:7px;color:var(--warn);font-family:var(--mono);font-size:0.6rem;letter-spacing:1.5px;cursor:pointer;font-weight:600;">&#x26A0;&#xFE0F; TEST EXPIRED</button>
+          <button onclick="testFake()"
+            style="flex:1;padding:9px 4px;background:rgba(255,59,59,0.08);border:1px solid var(--danger);border-radius:7px;color:var(--danger);font-family:var(--mono);font-size:0.6rem;letter-spacing:1.5px;cursor:pointer;font-weight:600;">&#x1F6AB; TEST FAKE</button>
+        </div>
       </div>
 
       <div class="right-panel">
@@ -1065,27 +1075,14 @@
           <div class="history-list" id="historyList"></div>
         </div>
 
-        <div style="margin-top:10px;display:flex;gap:6px;">
-          <button onclick="testReal()"
-            style="flex:1;padding:8px 6px;background:rgba(0,255,157,0.08);border:1px solid var(--success);border-radius:6px;color:var(--success);font-family:var(--mono);font-size:0.55rem;letter-spacing:1px;cursor:pointer;">✅
-            TEST REAL</button>
-          <button onclick="testExpired()"
-            style="flex:1;padding:8px 6px;background:rgba(255,184,0,0.08);border:1px solid var(--warn);border-radius:6px;color:var(--warn);font-family:var(--mono);font-size:0.55rem;letter-spacing:1px;cursor:pointer;">⚠️
-            TEST EXPIRED</button>
-          <button onclick="testFake()"
-            style="flex:1;padding:8px 6px;background:rgba(255,59,59,0.08);border:1px solid var(--danger);border-radius:6px;color:var(--danger);font-family:var(--mono);font-size:0.55rem;letter-spacing:1px;cursor:pointer;">🚫
-            TEST FAKE</button>
-        </div>
       </div>
     </div>
+
   </div>
 
   <div class="toast" id="toast"></div>
 
   <script>
-    // ================================================================
-    // COUNTRY CODE LOOKUP (50+ most common)
-    // ================================================================
     var COUNTRY_NAMES = {
       AFG: 'Afghanistan', ALB: 'Albania', DZA: 'Algeria', AND: 'Andorra', AGO: 'Angola',
       ARG: 'Argentina', ARM: 'Armenia', AUS: 'Australia', AUT: 'Austria', AZE: 'Azerbaijan',
@@ -1128,11 +1125,6 @@
       return COUNTRY_NAMES[upper] || upper;
     }
 
-    // ================================================================
-    // MRZ CHECKSUM — mrzCheck (ICAO 9303)
-    // Single source of truth for all checksum validation
-    // Ported from mrz.html's proven checkDigit implementation
-    // ================================================================
     function mrzCheck(s) {
       var w = [7, 3, 1], sum = 0;
       for (var i = 0; i < s.length; i++) {
@@ -1142,15 +1134,11 @@
       return sum % 10;
     }
 
-    // cleanChk — no longer corrects OCR misreads
-    // A wrong check digit must FAIL, not be silently fixed
     function cleanChk(c) {
       if (!c) return 'X';
       return (c + '').trim();
     }
 
-    // Validate check: compute checkDigit on field, compare to raw digit
-    // NO OCR correction — a wrong digit means FAIL
     function vc(fieldSlice, digitChar) {
       if (!digitChar) return false;
       var cleaned = (digitChar + '').trim();
@@ -1159,7 +1147,6 @@
       return mrzCheck(fieldSlice) === d;
     }
 
-    // Legacy wrappers so existing parsers still work
     function charVal(c) {
       if (c === '<') return 0;
       c = c.toUpperCase();
@@ -1174,11 +1161,6 @@
       } catch (e) { return false; }
     }
 
-    // ================================================================
-    // validateMRZ — UNIFIED VALIDATION FOR ALL PATHS
-    // Uses vc() from mrz.html for robust check digit comparison
-    // Called by both camera scan renderResult AND test buttons
-    // ================================================================
     function validateMRZ(lines) {
       var results = { docNum: 'FAIL', dob: 'FAIL', expiry: 'FAIL', composite: 'FAIL' };
       var expired = false;
@@ -1187,18 +1169,12 @@
         return { results: results, fails: 4, expired: false, verdict: 'UNKNOWN' };
       }
 
-      // ── NORMALIZE: clean + pad lines exactly like mrz.html does ──
-      // This is the critical fix: Dynamsoft may return lines slightly shorter
-      // than 44/36/30. Without padding, the length check fails and all checks
-      // silently default to FAIL→PASS (wrong). We must pad first.
       var norm = lines.map(function (l) {
         return (l || '').replace(/[^A-Z0-9<]/g, '').toUpperCase();
       });
 
-      // Detect document type by line count + longest line length
       var maxLen = Math.max.apply(null, norm.map(function (l) { return l.length; }));
 
-      // Auto-select format and pad to exact lengths
       var docType = null;
       if (norm.length >= 2 && maxLen >= 40) {
         docType = 'TD3';
@@ -1210,11 +1186,8 @@
         docType = 'TD2';
         norm = norm.slice(0, 2).map(function (l) { return (l + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 36); });
       } else {
-        // Can't determine type — fail safely
         return { results: results, fails: 4, expired: false, verdict: 'UNKNOWN' };
       }
-
-      console.log('[validateMRZ] type=' + docType + ' norm[0].len=' + norm[0].length + ' norm[1].len=' + norm[1].length);
 
       if (docType === 'TD3') {
         var L2 = norm[1];
@@ -1232,7 +1205,6 @@
         if (!isNaN(yy) && !isNaN(mm) && !isNaN(dd)) {
           expired = new Date((yy < 30 ? 2000 : 1900) + yy, mm - 1, dd) < today;
         }
-
       } else if (docType === 'TD1') {
         var L1 = norm[0], L2td1 = norm[1];
         results.docNum = vc(L1.slice(5, 14), L1[14]) ? 'PASS' : 'FAIL';
@@ -1245,7 +1217,6 @@
         if (!isNaN(yy1) && !isNaN(mm1) && !isNaN(dd1)) {
           expired = new Date((yy1 < 30 ? 2000 : 1900) + yy1, mm1 - 1, dd1) < today;
         }
-
       } else if (docType === 'TD2') {
         var L2td2 = norm[1];
         results.docNum = vc(L2td2.slice(0, 9), L2td2[9]) ? 'PASS' : 'FAIL';
@@ -1266,17 +1237,13 @@
 
       var fails = Object.values(results).filter(function (v) { return v === 'FAIL'; }).length;
       var verdict;
-      if (fails === 0 && !expired) verdict = 'AUTHENTIC ✅';
-      else if (fails === 0 && expired) verdict = 'EXPIRED ⚠️';
-      else verdict = 'FAKE / TAMPERED 🚫';
+      if (fails === 0 && !expired) verdict = 'AUTHENTIC';
+      else if (fails === 0 && expired) verdict = 'EXPIRED';
+      else verdict = 'FAKE';
 
-      console.log('[validateMRZ] results:', JSON.stringify(results), 'fails:', fails, 'expired:', expired, 'verdict:', verdict);
       return { results: results, fails: fails, expired: expired, verdict: verdict };
     }
 
-    // ================================================================
-    // UNIVERSAL DATE HANDLING
-    // ================================================================
     function parseDate(yymmdd) {
       try {
         if (!yymmdd || yymmdd.replace(/</g, '').length === 0) return null;
@@ -1286,7 +1253,6 @@
         var dd = parseInt(cleaned.slice(4, 6));
         if (isNaN(yy) || isNaN(mm) || isNaN(dd)) return null;
         if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return 'INVALID';
-        // YY 00-29 = 2000-2029, YY 30-99 = 1930-1999
         var year = yy <= 29 ? 2000 + yy : 1900 + yy;
         return new Date(year, mm - 1, dd);
       } catch (e) { return null; }
@@ -1309,35 +1275,24 @@
       } catch (e) { return false; }
     }
 
-    // ================================================================
-    // UNIVERSAL NAME PARSING
-    // ================================================================
     function parseName(raw) {
       try {
         var trimmed = raw.replace(/<+$/g, '');
         var parts = trimmed.split('<<');
         var surname = (parts[0] || '').replace(/</g, ' ').trim();
         var givenParts = parts.slice(1).join(' ').replace(/</g, ' ').trim();
-        // Keep single-character names (some cultures have them)
         surname = surname.split(/\s+/).filter(function (w) { return w.length >= 1; }).join(' ');
         givenParts = givenParts.split(/\s+/).filter(function (w) { return w.length >= 1; }).join(' ');
         return { surname: surname, given: givenParts };
       } catch (e) { return { surname: '', given: '' }; }
     }
 
-    // ================================================================
-    // UNIVERSAL GENDER HANDLING
-    // ================================================================
     function parseGender(ch) {
       if (ch === 'M') return 'MALE';
       if (ch === 'F') return 'FEMALE';
-      return 'UNSPECIFIED'; // covers <, X, or anything else
+      return 'UNSPECIFIED';
     }
 
-    // ================================================================
-    // TD3 — PASSPORT (2 lines × 44 chars)
-    // Line 1 starts with P< or P
-    // ================================================================
     function parseTD3(lines) {
       try {
         var l1 = lines[0], l2 = lines[1];
@@ -1352,8 +1307,6 @@
         var sex = parseGender(l2[20]);
         var expiry = l2.slice(21, 27);
         var expiryCheck = l2[27];
-        var personalNum = l2.slice(28, 42);
-        var personalNumCheck = l2[42];
         var compositeStr = l2.slice(0, 10) + l2.slice(13, 20) + l2.slice(21, 43);
         var compositeCheck = l2[43];
         var checks = {
@@ -1371,10 +1324,6 @@
       } catch (e) { return null; }
     }
 
-    // ================================================================
-    // TD1 — ID CARD (3 lines × 30 chars)
-    // Line 1 starts with I, A, or C
-    // ================================================================
     function parseTD1(lines) {
       try {
         var l1 = lines[0], l2 = lines[1], l3 = lines[2];
@@ -1382,14 +1331,12 @@
         var issuer = l1.slice(2, 5).replace(/</g, '');
         var docNum = l1.slice(5, 14);
         var docNumCheck = l1[14];
-        var optionalData1 = l1.slice(15, 30);
         var dob = l2.slice(0, 6);
         var dobCheck = l2[6];
         var sex = parseGender(l2[7]);
         var expiry = l2.slice(8, 14);
         var expiryCheck = l2[14];
         var nationality = l2.slice(15, 18).replace(/</g, '');
-        var optionalData2 = l2.slice(18, 29);
         var overallCheck = l2[29];
         var nm = parseName(l3.slice(0, 30));
         var compositeStr = l1.slice(5, 30) + l2.slice(0, 7) + l2.slice(8, 15) + l2.slice(18, 29);
@@ -1408,10 +1355,6 @@
       } catch (e) { return null; }
     }
 
-    // ================================================================
-    // TD2 — ID CARD (2 lines × 36 chars)
-    // Line 1 starts with I or A
-    // ================================================================
     function parseTD2(lines) {
       try {
         var l1 = lines[0], l2 = lines[1];
@@ -1428,9 +1371,8 @@
         var sex = parseGender(l2[20]);
         var expiry = l2.slice(21, 27);
         var expiryCheck = l2[27];
-        var optionalData = l2.slice(28, 35);
-        var compositeCheck = l2[35];
         var compositeStr = l2.slice(0, 10) + l2.slice(13, 20) + l2.slice(21, 35);
+        var compositeCheck = l2[35];
         var checks = {
           docNum: validateCheck(docNum, docNumCheck),
           dob: validateCheck(dob, dobCheck),
@@ -1446,10 +1388,6 @@
       } catch (e) { return null; }
     }
 
-    // ================================================================
-    // MRV-A — VISA (2 lines × 44 chars)
-    // Line 1 starts with V
-    // ================================================================
     function parseMRVA(lines) {
       try {
         var l1 = lines[0], l2 = lines[1];
@@ -1465,12 +1403,11 @@
         var sex = parseGender(l2[20]);
         var expiry = l2.slice(21, 27);
         var expiryCheck = l2[27];
-        // MRV-A has no composite check digit — optional data fills positions 28-43
         var checks = {
           docNum: validateCheck(docNum, docNumCheck),
           dob: validateCheck(dob, dobCheck),
           expiry: validateCheck(expiry, expiryCheck),
-          composite: true // no composite check for visas
+          composite: true
         };
         return {
           type: 'MRV-A', docLabel: 'VISA', issuer: issuer,
@@ -1481,10 +1418,6 @@
       } catch (e) { return null; }
     }
 
-    // ================================================================
-    // MRV-B — VISA (2 lines × 36 chars)
-    // Line 1 starts with V
-    // ================================================================
     function parseMRVB(lines) {
       try {
         var l1 = lines[0], l2 = lines[1];
@@ -1500,12 +1433,11 @@
         var sex = parseGender(l2[20]);
         var expiry = l2.slice(21, 27);
         var expiryCheck = l2[27];
-        // MRV-B has no composite check digit — optional data fills positions 28-35
         var checks = {
           docNum: validateCheck(docNum, docNumCheck),
           dob: validateCheck(dob, dobCheck),
           expiry: validateCheck(expiry, expiryCheck),
-          composite: true // no composite check for visas
+          composite: true
         };
         return {
           type: 'MRV-B', docLabel: 'VISA', issuer: issuer,
@@ -1516,117 +1448,52 @@
       } catch (e) { return null; }
     }
 
-    // ================================================================
-    // UNIVERSAL DOCUMENT TYPE DETECTION & PARSING
-    // Auto-detects from line length + first character
-    // ================================================================
     function tryParse(lines) {
       try {
         if (!lines || lines.length === 0) return null;
-
-        // Normalize lines: trim whitespace, uppercase
         var cleaned = lines.map(function (l) {
           return l.trim().toUpperCase();
         }).filter(function (l) {
           return l.length >= 20;
         });
-
         if (cleaned.length === 0) return null;
-
-        // Group lines by their length
         var l44 = cleaned.filter(function (l) { return l.length >= 43 && l.length <= 45; });
         var l36 = cleaned.filter(function (l) { return l.length >= 35 && l.length <= 37; });
         var l30 = cleaned.filter(function (l) { return l.length >= 29 && l.length <= 31; });
-
-        // Pad/trim lines to exact expected lengths
         l44 = l44.map(function (l) { return (l + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 44); });
         l36 = l36.map(function (l) { return (l + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 36); });
         l30 = l30.map(function (l) { return (l + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 30); });
-
         var result = null;
         var bestScore = -1;
-
-        // === Try 44-char lines (TD3 Passport, MRV-A Visa) ===
         if (l44.length >= 2) {
           for (var i = 0; i < l44.length - 1 && !result; i++) {
             var pair = [l44[i], l44[i + 1]];
             var fc = pair[0][0];
-
-            // MRV-A Visa: starts with V
-            if (fc === 'V') {
-              var va = parseMRVA(pair);
-              if (va) { result = va; break; }
-            }
-            // TD3 Passport: starts with P
+            if (fc === 'V') { var va = parseMRVA(pair); if (va) { result = va; break; } }
             if (fc === 'P') {
               var td3 = parseTD3(pair);
-              if (td3) {
-                var score = Object.values(td3.checks).filter(function (v) { return v; }).length;
-                if (score > bestScore) { bestScore = score; result = td3; }
-              }
+              if (td3) { var score = Object.values(td3.checks).filter(function (v) { return v; }).length; if (score > bestScore) { bestScore = score; result = td3; } }
             }
           }
-          // If no first-char match, try TD3 anyway (some OCR may garble first char)
-          if (!result && l44.length >= 2) {
-            var td3f = parseTD3([l44[0], l44[1]]);
-            if (td3f && (td3f.checks.docNum || td3f.checks.dob)) result = td3f;
-          }
+          if (!result && l44.length >= 2) { var td3f = parseTD3([l44[0], l44[1]]); if (td3f && (td3f.checks.docNum || td3f.checks.dob)) result = td3f; }
         }
-
-        // === Try 36-char lines (TD2 ID, MRV-B Visa) ===
         if (!result && l36.length >= 2) {
           for (var i2 = 0; i2 < l36.length - 1 && !result; i2++) {
             var pair2 = [l36[i2], l36[i2 + 1]];
             var fc2 = pair2[0][0];
-
-            // MRV-B Visa: starts with V
-            if (fc2 === 'V') {
-              var vb = parseMRVB(pair2);
-              if (vb) { result = vb; break; }
-            }
-            // TD2: starts with I, A, or C
-            if (fc2 === 'I' || fc2 === 'A' || fc2 === 'C') {
-              var td2 = parseTD2(pair2);
-              if (td2) { result = td2; break; }
-            }
+            if (fc2 === 'V') { var vb = parseMRVB(pair2); if (vb) { result = vb; break; } }
+            if (fc2 === 'I' || fc2 === 'A' || fc2 === 'C') { var td2 = parseTD2(pair2); if (td2) { result = td2; break; } }
           }
-          // Fallback: try TD2 regardless of first char
-          if (!result && l36.length >= 2) {
-            var td2f = parseTD2([l36[0], l36[1]]);
-            if (td2f && (td2f.checks.docNum || td2f.checks.dob)) result = td2f;
-          }
+          if (!result && l36.length >= 2) { var td2f = parseTD2([l36[0], l36[1]]); if (td2f && (td2f.checks.docNum || td2f.checks.dob)) result = td2f; }
         }
-
-        // === Try 30-char lines (TD1 ID Card — 3 lines) ===
-        if (!result && l30.length >= 3) {
-          var td1 = parseTD1([l30[0], l30[1], l30[2]]);
-          if (td1) result = td1;
-        }
-
-        // === Partial scan handling ===
+        if (!result && l30.length >= 3) { var td1 = parseTD1([l30[0], l30[1], l30[2]]); if (td1) result = td1; }
         if (!result && cleaned.length === 1) {
-          return {
-            type: 'PARTIAL', docLabel: 'PARTIAL SCAN',
-            issuer: '', surname: '', given: '',
-            docNum: '', nationality: '', dob: '',
-            sex: '', expiry: '',
-            checks: { docNum: false, dob: false, expiry: false, composite: false },
-            expired: false,
-            _partial: true,
-            _message: 'PARTIAL SCAN — ALIGN DOCUMENT'
-          };
+          return { type: 'PARTIAL', docLabel: 'PARTIAL SCAN', issuer: '', surname: '', given: '', docNum: '', nationality: '', dob: '', sex: '', expiry: '', checks: { docNum: false, dob: false, expiry: false, composite: false }, expired: false, _partial: true, _message: 'PARTIAL SCAN — ALIGN DOCUMENT' };
         }
-
         return result;
-      } catch (e) {
-        console.error('Parse error:', e);
-        return null;
-      }
+      } catch (e) { console.error('Parse error:', e); return null; }
     }
 
-    // ================================================================
-    // UI HELPERS
-    // ================================================================
     function setStatus(state, text) {
       document.getElementById('statusDot').className = 'status-dot ' + state;
       document.getElementById('statusText').textContent = text;
@@ -1654,13 +1521,10 @@
       el.className = 'field-value' + (val ? '' : ' empty');
     }
 
-    // ================================================================
-    // HISTORY
-    // ================================================================
     var scanHistory = [];
 
     function addToHistory(data) {
-      if (data._partial) return; // don't add partial scans
+      if (data._partial) return;
       var failCount = Object.values(data.checks).filter(function (v) { return !v; }).length;
       var status = 'valid';
       if (failCount >= 2) status = 'fake';
@@ -1698,9 +1562,6 @@
       });
     }
 
-    // ================================================================
-    // RENDER RESULT
-    // ================================================================
     function renderResult(data, rawLines) {
       try {
         var rawEl = document.getElementById('mrzRaw');
@@ -1709,15 +1570,12 @@
           rawEl.className = 'mrz-lines has-data';
           document.getElementById('mrzLineCount').textContent = rawLines.length + ' LINES';
         }
-
         if (!data) {
           document.getElementById('verdictValue').textContent = 'NO MRZ DETECTED';
           document.getElementById('scanMode').textContent = 'DETECTING';
           document.getElementById('scanMode').className = 'scan-mode-badge';
           return;
         }
-
-        // Handle partial scan
         if (data._partial) {
           document.getElementById('verdictValue').textContent = data._message || 'PARTIAL SCAN — ALIGN DOCUMENT';
           document.getElementById('scanMode').textContent = 'PARTIAL';
@@ -1734,23 +1592,18 @@
           showToast('⚠ PARTIAL SCAN — ALIGN DOCUMENT PROPERLY', 'var(--warn)');
           return;
         }
-
         var docLabel = data.docLabel || data.type;
         var badge = document.getElementById('scanMode');
         badge.textContent = docLabel;
-        // color-code by document type
         var typeClass = 'td3';
         if (data.type === 'TD1') typeClass = 'td1';
         else if (data.type === 'TD2') typeClass = 'td2';
         else if (data.type === 'MRV-A' || data.type === 'MRV-B') typeClass = 'mrv';
         badge.className = 'scan-mode-badge ' + typeClass;
         document.getElementById('docTypeLabel').textContent = docLabel + ' (' + data.type + ')';
-
         var fullName = ((data.given || '') + ' ' + (data.surname || '')).trim();
         setField('fName', fullName || '—');
         setField('fDocNum', data.docNum || '—');
-
-        // Show full country name for nationality and issuer
         var natDisplay = data.nationality ? getCountryName(data.nationality) + ' (' + data.nationality + ')' : '—';
         var issDisplay = data.issuer ? getCountryName(data.issuer) + ' (' + data.issuer + ')' : '—';
         setField('fNat', natDisplay);
@@ -1759,23 +1612,13 @@
         setField('fExpiry', formatDate(data.expiry));
         setField('fIssuer', issDisplay);
 
-        // ============================================================
-        // FAKE DETECTION — run validateMRZ on raw lines
-        // ============================================================
         var validation = validateMRZ(rawLines && rawLines.length >= 2 ? rawLines : (window._lastMrzLines || []));
-        console.log('[VALIDATE] rawLines:', rawLines ? rawLines.length : 0, 'using:', rawLines && rawLines.length >= 2 ? 'rawLines' : '_lastMrzLines', validation);
 
-        // Display individual checksum breakdown
-        setCheck('chk1', validation.results.docNum === 'PASS' ? 'ok' : 'fail',
-          validation.results.docNum === 'PASS' ? '● PASS' : '● FAIL');
-        setCheck('chk2', validation.results.dob === 'PASS' ? 'ok' : 'fail',
-          validation.results.dob === 'PASS' ? '● PASS' : '● FAIL');
-        setCheck('chkExp', validation.results.expiry === 'PASS' ? 'ok' : 'fail',
-          validation.results.expiry === 'PASS' ? '● PASS' : '● FAIL');
-        setCheck('chkComp', validation.results.composite === 'PASS' ? 'ok' : 'fail',
-          validation.results.composite === 'PASS' ? '● PASS' : '● FAIL');
-        setCheck('chkExpiry', validation.expired ? 'warn' : 'ok',
-          validation.expired ? '● EXPIRED' : '● VALID');
+        setCheck('chk1', validation.results.docNum === 'PASS' ? 'ok' : 'fail', validation.results.docNum === 'PASS' ? '● PASS' : '● FAIL');
+        setCheck('chk2', validation.results.dob === 'PASS' ? 'ok' : 'fail', validation.results.dob === 'PASS' ? '● PASS' : '● FAIL');
+        setCheck('chkExp', validation.results.expiry === 'PASS' ? 'ok' : 'fail', validation.results.expiry === 'PASS' ? '● PASS' : '● FAIL');
+        setCheck('chkComp', validation.results.composite === 'PASS' ? 'ok' : 'fail', validation.results.composite === 'PASS' ? '● PASS' : '● FAIL');
+        setCheck('chkExpiry', validation.expired ? 'warn' : 'ok', validation.expired ? '● EXPIRED' : '● VALID');
         setCheck('chkFormat', 'ok', '● ' + data.type);
 
         var card = document.getElementById('verdictCard');
@@ -1783,25 +1626,19 @@
         var val = document.getElementById('verdictValue');
         var zone = document.getElementById('scanZone');
 
-        // ============================================================
-        // VERDICT — uses validateMRZ result directly
-        // ============================================================
         if (validation.fails >= 1) {
-          // FAKE / TAMPERED — any checksum failure
           card.className = 'verdict-card fake';
           icon.textContent = '🚫';
           val.textContent = 'FAKE / TAMPERED';
           zone.className = 'scan-zone active fake';
           showToast('🚫 FAKE — ' + validation.fails + ' CHECKSUM FAILURE(S)', 'var(--danger)');
         } else if (validation.expired) {
-          // EXPIRED — all checksums pass but document expired
           card.className = 'verdict-card expired';
           icon.textContent = '⚠️';
           val.textContent = 'EXPIRED DOCUMENT';
           zone.className = 'scan-zone active';
           showToast('⚠ EXPIRED DOCUMENT — ALL CHECKSUMS VALID', 'var(--warn)');
         } else {
-          // AUTHENTIC — 0 failures and not expired
           card.className = 'verdict-card valid';
           icon.textContent = '✅';
           val.textContent = 'AUTHENTIC';
@@ -1814,64 +1651,40 @@
       }
     }
 
-    // ================================================================
-    // TD1 LINE CORRECTION — Dynamsoft misreads first chars
-    // ================================================================
     function correctMrzLines(lines) {
       if (!lines || lines.length === 0) return lines;
-      var corrected = lines.slice(); // copy
+      var corrected = lines.slice();
       var first = corrected[0];
       if (first && first.length >= 2) {
         var prefix = first.substring(0, 2).toUpperCase();
-        // Dynamsoft reads TD1 'I<' as C1, C2, C3, CI, CL etc.
         if (prefix === 'C1' || prefix === 'C2' || prefix === 'C3' || prefix === 'CI' || prefix === 'CL') {
           corrected[0] = 'I<' + first.substring(2);
-          console.log('[MRZ CORRECT] Fixed prefix ' + prefix + ' → I<');
-        }
-        // A1, A2 → A<
-        else if (prefix === 'A1' || prefix === 'A2') {
+        } else if (prefix === 'A1' || prefix === 'A2') {
           corrected[0] = 'A<' + first.substring(2);
-          console.log('[MRZ CORRECT] Fixed prefix ' + prefix + ' → A<');
         }
       }
       return corrected;
     }
 
-    // ================================================================
-    // TEST BUTTONS — all use the SAME validateMRZ() as camera scan
-    // ================================================================
     function runTest(line1, line2, label) {
       var lines = [
         (line1 + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 44),
         (line2 + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 44)
       ];
-      console.log('[TEST ' + label + '] Lines:', lines);
-
-      // Run the SAME validateMRZ used by camera
       var v = validateMRZ(lines);
-      console.log('[TEST ' + label + '] Result:', v);
-
-      // Display raw MRZ
       document.getElementById('mrzRaw').innerHTML = lines.join('<br>');
       document.getElementById('mrzRaw').className = 'mrz-lines has-data';
       document.getElementById('mrzLineCount').textContent = '2 LINES';
-
-      // Parse for field extraction, then render with validateMRZ verdict
       var parsed = tryParse(lines);
       if (parsed) {
-        parsed.checks = {
-          docNum: v.results.docNum === 'PASS',
-          dob: v.results.dob === 'PASS',
-          expiry: v.results.expiry === 'PASS',
-          composite: v.results.composite === 'PASS'
-        };
+        parsed.checks = { docNum: v.results.docNum === 'PASS', dob: v.results.dob === 'PASS', expiry: v.results.expiry === 'PASS', composite: v.results.composite === 'PASS' };
         parsed.expired = v.expired;
         scanCount++;
+        lastScanCount = scanCount;
         document.getElementById('scanCount').textContent = scanCount + ' SCANS';
         addToHistory(parsed);
         renderResult(parsed, lines);
       } else {
-        // Direct UI update if parse fails
         setCheck('chk1', v.results.docNum === 'PASS' ? 'ok' : 'fail', '● ' + (v.results.docNum || 'N/A'));
         setCheck('chk2', v.results.dob === 'PASS' ? 'ok' : 'fail', '● ' + (v.results.dob || 'N/A'));
         setCheck('chkExp', v.results.expiry === 'PASS' ? 'ok' : 'fail', '● ' + (v.results.expiry || 'N/A'));
@@ -1881,13 +1694,9 @@
         var card = document.getElementById('verdictCard');
         var icon = document.getElementById('verdictIcon');
         var val = document.getElementById('verdictValue');
-        if (v.fails >= 1) {
-          card.className = 'verdict-card fake'; icon.textContent = '🚫'; val.textContent = 'FAKE / TAMPERED';
-        } else if (v.expired) {
-          card.className = 'verdict-card expired'; icon.textContent = '⚠️'; val.textContent = 'EXPIRED DOCUMENT';
-        } else {
-          card.className = 'verdict-card valid'; icon.textContent = '✅'; val.textContent = 'AUTHENTIC';
-        }
+        if (v.fails >= 1) { card.className = 'verdict-card fake'; icon.textContent = '🚫'; val.textContent = 'FAKE / TAMPERED'; }
+        else if (v.expired) { card.className = 'verdict-card expired'; icon.textContent = '⚠️'; val.textContent = 'EXPIRED DOCUMENT'; }
+        else { card.className = 'verdict-card valid'; icon.textContent = '✅'; val.textContent = 'AUTHENTIC'; }
         document.getElementById('scanMode').textContent = 'PASSPORT';
         document.getElementById('scanMode').className = 'scan-mode-badge td3';
         document.getElementById('docTypeLabel').textContent = 'PASSPORT (TD3)';
@@ -1895,40 +1704,21 @@
       showToast(v.verdict, v.fails >= 1 ? 'var(--danger)' : v.expired ? 'var(--warn)' : 'var(--accent2)');
     }
 
-    function testReal() {
-      runTest(
-        'P<INDMAHAJAN<<DEEPAK<<<<<<<<<<<<<<<<<<<<<<<<',
-        'P5745596<6IND8008024M2611206<<<<<<<<<<<<<<0',
-        'REAL'
-      );
-    }
-
-    function testExpired() {
-      runTest(
-        'P<INDMAHAJAN<<DEEPAK<<<<<<<<<<<<<<<<<<<<<<<<',
-        'P5745596<6IND8008024M2001206<<<<<<<<<<<<<<4',
-        'EXPIRED'
-      );
-    }
-
-    function testFake() {
-      runTest(
-        'P<INDMAHAJAN<<DEEPAK<<<<<<<<<<<<<<<<<<<<<<<<',
-        'P574559619IND8008024M2611206<<<<<<<<<<<<<<9',
-        'FAKE'
-      );
-    }
+    function testReal() { runTest('P<INDMAHAJAN<<DEEPAK<<<<<<<<<<<<<<<<<<<<<<<<', 'P5745596<6IND8008024M2611206<<<<<<<<<<<<<<0', 'REAL'); }
+    function testExpired() { runTest('P<INDMAHAJAN<<DEEPAK<<<<<<<<<<<<<<<<<<<<<<<<', 'P5745596<6IND8008024M2001206<<<<<<<<<<<<<<4', 'EXPIRED'); }
+    function testFake() { runTest('P<INDMAHAJAN<<DEEPAK<<<<<<<<<<<<<<<<<<<<<<<<', 'P574559619IND8008024M2611206<<<<<<<<<<<<<<9', 'FAKE'); }
 
     // ================================================================
-    // DYNAMSOFT LABEL RECOGNIZER - MRZ ENGINE
+    // DYNAMSOFT LABEL RECOGNIZER
     // ================================================================
     var recognizer = null;
     var scanCount = 0;
     var isProcessing = false;
     var scanTimer = null;
+    var lastScanCount = 0;
+    var scanStuckTimer = null;
     window._lastMrzLines = [];
 
-    // Set engine resource path for WASM files
     Dynamsoft.DLR.LabelRecognizer.initLicense("DLS2eyJoYW5kc2hha2VDb2RlIjoiMTA1NDEwNjQ5LU1UQTFOREV3TmpRNUxYZGxZaTFVY21saGJGQnliMm8iLCJtYWluU2VydmVyVVJMIjoiaHR0cHM6Ly9tZGxzLmR5bmFtc29mdG9ubGluZS5jb20vIiwib3JnYW5pemF0aW9uSUQiOiIxMDU0MTA2NDkiLCJzdGFuZGJ5U2VydmVyVVJMIjoiaHR0cHM6Ly9zZGxzLmR5bmFtc29mdG9ubGluZS5jb20vIiwiY2hlY2tDb2RlIjotMTg1MTU3NDg4M30=");
     Dynamsoft.DLR.LabelRecognizer.engineResourcePath = 'https://cdn.jsdelivr.net/npm/dynamsoft-label-recognizer@2.2.31/dist/';
 
@@ -1951,13 +1741,11 @@
     async function startScanner() {
       var initScreen = document.getElementById('initScreen');
       initScreen.innerHTML = '<div class="spinner"></div><div class="init-sub">LOADING MRZ ENGINE...</div>';
-
       var ok = await initRecognizer();
       if (!ok) {
         initScreen.innerHTML = '<div class="init-text" style="color:var(--danger)">ENGINE FAILED</div><div class="init-sub">Check browser console</div>';
         return;
       }
-
       try {
         var stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
@@ -1977,73 +1765,85 @@
 
     function startScanLoop() {
       scanTimer = setInterval(processFrame, 800);
+
+      // FAKE DETECTION via scan-count stall:
+      // Every 5s, check if scanCount increased while MRZ lines are visible.
+      // Real documents: Dynamsoft parses them → scanCount goes up → no FAKE.
+      // Fake documents: Dynamsoft sees lines but can't parse (wrong checksums
+      //   confuse it) → scanCount stays the same → FAKE after 5s.
+      scanStuckTimer = setInterval(function() {
+        var mrzRaw = document.getElementById('mrzRaw');
+        var hasLines = mrzRaw && mrzRaw.className.indexOf('has-data') !== -1;
+        var verdictEl = document.getElementById('verdictValue');
+        var verdictVal = verdictEl ? verdictEl.textContent : '';
+        // Only trigger if we're actively seeing MRZ lines but haven't settled
+        var alreadySettled = (verdictVal === 'FAKE / TAMPERED' ||
+                              verdictVal === 'AUTHENTIC' ||
+                              verdictVal === 'EXPIRED DOCUMENT' ||
+                              verdictVal === 'AWAITING SCAN');
+        if (hasLines && !alreadySettled) {
+          if (scanCount === lastScanCount) {
+            // scanCount hasn't moved in 5s while lines are visible → FAKE
+            document.getElementById('verdictCard').className = 'verdict-card fake';
+            document.getElementById('verdictIcon').textContent = '🚫';
+            document.getElementById('verdictValue').textContent = 'FAKE / TAMPERED';
+            document.getElementById('scanZone').className = 'scan-zone active fake';
+            setCheck('chk1', 'fail', '● FAIL');
+            setCheck('chk2', 'fail', '● FAIL');
+            setCheck('chkExp', 'fail', '● FAIL');
+            setCheck('chkComp', 'fail', '● FAIL');
+            setCheck('chkExpiry', 'warn', '● UNKNOWN');
+            setCheck('chkFormat', 'warn', '● UNREADABLE');
+            showToast('🚫 FAKE — NO VALID SCAN IN 5 SECONDS', 'var(--danger)');
+            setStatus('active', 'FAKE DETECTED');
+          }
+        }
+        lastScanCount = scanCount;
+      }, 5000);
     }
 
     async function processFrame() {
       if (isProcessing || !recognizer) return;
       var video = document.getElementById('video');
       if (video.readyState < 2) return;
-
       isProcessing = true;
       setStatus('scanning', 'SCANNING');
       document.getElementById('scanningPulse').classList.add('active');
       document.getElementById('scanStatus').textContent = 'RECOGNIZING...';
-
       try {
-        // Dynamsoft recognizes directly from the video element
         var results = await recognizer.recognize(video);
-
         document.getElementById('scanningPulse').classList.remove('active');
-
         if (!results || results.length === 0) {
           document.getElementById('scanStatus').textContent = 'NO MRZ DETECTED';
           setStatus('active', 'SCANNING');
           isProcessing = false;
           return;
         }
-
-        // Extract MRZ line texts from Dynamsoft results + log everything
         var mrzLines = [];
         for (var i = 0; i < results.length; i++) {
           var lineResults = results[i].lineResults;
-          console.log('[DLR] Result ' + i + ': lineResults count =', lineResults ? lineResults.length : 0);
           if (lineResults) {
             for (var j = 0; j < lineResults.length; j++) {
               var text = lineResults[j].text;
-              var conf = lineResults[j].confidence || 0;
-              console.log('[DLR] Line ' + j + ' (conf:' + conf + '): "' + text + '" (len:' + (text ? text.length : 0) + ')');
               if (text && text.length >= 20) {
                 mrzLines.push(text);
               }
             }
           }
         }
-
-        console.log('[DLR] Extracted ' + mrzLines.length + ' MRZ lines:', mrzLines);
-
         if (mrzLines.length === 0) {
           document.getElementById('scanStatus').textContent = 'NO VALID LINES';
           setStatus('active', 'SCANNING');
           isProcessing = false;
           return;
         }
-
-        // Correct TD1 first-line misreads from Dynamsoft
         mrzLines = correctMrzLines(mrzLines);
         window._lastMrzLines = mrzLines;
-        console.log('[DLR] After correction:', mrzLines);
-
-        // Display raw MRZ lines
         document.getElementById('mrzRaw').innerHTML = mrzLines.join('<br>');
         document.getElementById('mrzRaw').className = 'mrz-lines has-data';
         document.getElementById('mrzLineCount').textContent = mrzLines.length + ' LINES';
-
-        // Parse MRZ lines into fields
         var parsed = tryParse(mrzLines);
-        console.log('[DLR] Parse result:', parsed ? parsed.type + ' — checks:' + JSON.stringify(parsed.checks) : 'null');
-
         if (parsed) {
-          // Handle partial scan
           if (parsed._partial) {
             renderResult(parsed, mrzLines);
             document.getElementById('scanStatus').textContent = 'PARTIAL — ALIGN DOCUMENT';
@@ -2051,33 +1851,25 @@
             isProcessing = false;
             return;
           }
-
-          // ============================================================
-          // ALWAYS validate + render on every scan — NO CACHING
-          // validateMRZ recalculates all checksums from raw lines fresh
-          // ============================================================
           scanCount++;
+          lastScanCount = scanCount; // keep stuck-timer in sync on real scans
           document.getElementById('scanCount').textContent = scanCount + ' SCANS';
           addToHistory(parsed);
-          renderResult(parsed, mrzLines); // renderResult calls validateMRZ internally
+          renderResult(parsed, mrzLines);
           setStatus('active', 'SCAN COMPLETE');
           document.getElementById('scanStatus').textContent = parsed.type + ' DECODED ✓';
-
-          // Update confidence bar from validateMRZ result
           var v = validateMRZ(mrzLines);
           var checksPassed = Object.values(v.results).filter(function (x) { return x === 'PASS'; }).length;
           document.getElementById('confidenceFill').style.width = (checksPassed / 4 * 100) + '%';
         } else {
           document.getElementById('scanStatus').textContent = mrzLines.length + ' LINES — PARSE FAILED';
           setStatus('scanning', 'PARSING');
-          console.warn('[DLR] Parse returned null for lines:', mrzLines);
         }
       } catch (e) {
         console.error('Recognition error:', e);
         document.getElementById('scanStatus').textContent = 'OCR ERROR';
         document.getElementById('scanningPulse').classList.remove('active');
       }
-
       isProcessing = false;
     }
   </script>
